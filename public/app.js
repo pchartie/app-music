@@ -579,14 +579,28 @@ async function startVoice() {
     state.textContent = `« ${text} »`; $('#voice-hint').style.visibility = 'hidden';
     await new Promise((r) => setTimeout(r, 650));
     stopVoice();
-    pendingPlay = /^(joue|jouer|lance|lancer|mets|mettre|ecoute|écoute|écouter|ecouter)\b/i.test(text);
-    setSearch(text);
+    const intent = voiceIntent(text);
+    pendingPlay = intent.play;
+    setSearch(intent.q);
   } catch (err) {
     if (err.name === 'AbortError') return stopVoice();
     box.classList.remove('thinking');
     state.textContent = err.message === 'not-installed' ? 'Recherche vocale non installée' : err.name === 'NotAllowedError' ? 'Micro non autorisé' : err.message;
     setTimeout(stopVoice, 1800);
   } finally { voiceCtl = null; }
+}
+// « joue Renaud » est parfois entendu « jo Renaud » : on reconnaît l'intention de lecture avec tolérance,
+// sauf si le début de la phrase est un vrai nom d'artiste (« Joe Bonamassa »).
+function voiceIntent(text) {
+  const t = text.trim();
+  const strict = /^(jou(e|es|ez|er)|lance[rz]?|mets|mettre|met|[ée]coute[rz]?|play)\s+/i;
+  if (strict.test(t)) return { play: true, q: 'joue ' + t.replace(strict, '') };
+  const loose = /^(jo|joe|jou|joué|jouet|joues)\s+/i;
+  if (loose.test(t)) {
+    const n = norm(t).split(/\s+/).slice(0, 2).join(' ');
+    if (!LIB.artists.some((a) => norm(a.name).startsWith(n))) return { play: true, q: 'joue ' + t.replace(loose, '') };
+  }
+  return { play: false, q: t };
 }
 function stopVoice() { voiceCtl?.abort(); voiceCtl = null; const box = $('#voice'); box.classList.remove('open', 'thinking'); box.setAttribute('aria-hidden', 'true'); }
 $('#mic').addEventListener('click', (e) => { e.preventDefault(); startVoice(); });

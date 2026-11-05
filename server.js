@@ -544,9 +544,13 @@ async function transcribe(wav) {
   const f = path.join(os.tmpdir(), `discotheque-voix-${process.pid}-${Date.now()}.wav`);
   await fsp.writeFile(f, wav);
   try {
-    // Les noms d'artistes de la bibliothèque guident la reconnaissance (« Rammstein », « In Flames »…)
-    const prompt = 'Recherche musicale : ' + library.artists.map((a) => a.name).join(', ') + '.';
-    const { stdout } = await exec(WHISPER, ['-m', WHISPER_MODEL, '-f', f, '-l', 'fr', '-nt', '-np', '-t', String(Math.min(8, os.cpus().length)), '--prompt', prompt.slice(0, 900)], { timeout: 60000 });
+    // Des exemples de requêtes et les noms d'artistes de la bibliothèque guident la reconnaissance
+    // (« joue Renaud », « metal allemand », « Rammstein », « In Flames »…)
+    const prompt = 'Joue Renaud. Metal allemand. Rock des années 80. Groupe suédois. Rap américain. Artistes : ' + library.artists.map((a) => a.name).join(', ') + '.';
+    const seconds = (wav.length - 44) / 32000; // WAV 16 kHz, 16 bits, mono
+    // fenêtre d'analyse réduite pour les phrases courtes : ~2 s au lieu de ~4 s, et plus juste
+    const ctx = seconds < 9.5 ? ['-ac', '512'] : [];
+    const { stdout } = await exec(WHISPER, ['-m', WHISPER_MODEL, '-f', f, '-l', 'fr', '-nt', '-np', '-t', String(Math.min(8, os.cpus().length)), ...ctx, '--prompt', prompt.slice(0, 900)], { timeout: 60000 });
     return stdout.replace(/\[.*?\]|\(.*?\)/g, '').replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
   } finally { fsp.rm(f, { force: true }).catch(() => {}); }
 }
