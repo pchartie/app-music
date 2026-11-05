@@ -166,6 +166,7 @@ async function scan() {
   };
   await fsp.writeFile(LIB_FILE, JSON.stringify(library));
   scanning = false;
+  hitIndex = null;
   setTimeout(syncMetadata, 1000);
   console.log(`Indexation : ${tracks.length} titres, ${albums.size} albums, ${artists.size} artistes en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
@@ -460,23 +461,37 @@ async function albumInfo(al) {
 async function readMeta(key) { return metaMem.get(key) || null; }
 const hasMeta = (key) => metaMem.has(key);
 const hasImg = (ar, kind) => fs.existsSync(path.join(ARTIST_IMG, `${ar.id}-${kind}.jpg`)) || fs.existsSync(path.join(ARTIST_IMG, `${ar.id}-${kind}.jpg.none`));
-// Article Wikipédia complet (texte brut), pour lire la biographie sans Internet
-const needsFullText = (key) => { const m = metaMem.get(key); return !!(m?.wiki && m.wiki.full === undefined); };
-async function wikiFull(w) {
-  const r = await fetchJSON(`https://${w.lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exsectionformat=wiki&redirects=1&format=json&titles=${encodeURIComponent(w.title)}`);
-  return Object.values(r.query?.pages || {})[0]?.extract || '';
+// Titres très connus : classement de popularité Deezer des morceaux de chaque artiste
+const HIT_RANK = 800000; // au-delà : les grands classiques (Nothing Else Matters, Seven Nation Army…)
+const baseSong = (t) => norm(String(t).replace(/\s*[\[(].*?[\])]/g, '').replace(/\s+-\s+.*(remaster|live|version|edit|mix|mono|stereo).*$/i, '')).replace(/[^a-z0-9]+/g, ' ').trim();
+async function fetchTopTracks(ar) {
+  try {
+    const dz = await deezerArtist(ar.name);
+    if (!dz) { await saveMeta('top-' + ar.id, { tracks: [] }); return; }
+    const r = await fetchJSON(`https://api.deezer.com/artist/${dz.id}/top?limit=30`);
+    await saveMeta('top-' + ar.id, { tracks: (r.data || []).map((t) => ({ title: t.title, rank: t.rank })) });
+  } catch (e) { console.warn('Popularité', ar.name, e.message); }
 }
-async function fillFullTexts() {
-  for (const key of [...metaMem.keys()].filter(needsFullText)) {
-    const m = metaMem.get(key);
-    try { m.wiki.full = await wikiFull(m.wiki); await saveMeta(key, m); }
-    catch (e) { console.warn('Article', m.wiki.title, e.message); if (!(await isOnline())) return; } // réseau coupé : on réessaiera plus tard
-    await sleep(600); // politesse envers Wikipédia
+let hitIndex = null; // artistId -> Map(titre normalisé -> rang)
+function hitRank(t) {
+  if (!hitIndex) {
+    hitIndex = new Map();
+    for (const ar of library.artists) {
+      const m = new Map();
+      for (const x of metaMem.get('top-' + ar.id)?.tracks || []) { const k = baseSong(x.title); m.set(k, Math.max(m.get(k) || 0, x.rank)); }
+      hitIndex.set(ar.id, m);
+    }
   }
+  if (/instrumental|karaok|a ?cappella|remix|demo\b/i.test(t.title)) return 0;
+  const r = hitIndex.get(t.artistId)?.get(baseSong(t.title)) || 0;
+  return r >= HIT_RANK ? r : 0;
 }
+// Nettoyage : les articles complets ne sont plus conservés (seule la première phrase est affichée)
+for (const [key, m] of metaMem) if (m?.wiki?.full !== undefined) { delete m.wiki.full; saveMeta(key, m); }
+
 function missing() {
   return {
-    texts: [...metaMem.keys()].filter(needsFullText),
+    texts: library.artists.filter((ar) => !metaMem.has('top-' + ar.id)),
     artists: library.artists.filter((ar) => !hasMeta('artist-' + ar.id) || !hasImg(ar, 'thumb') || !hasImg(ar, 'fanart')),
     albums: library.albums.filter((al) => !hasMeta('album-' + al.id)),
   };
@@ -493,10 +508,11 @@ async function syncMetadata() {
   try {
     online = await isOnline();
     if (!online) { console.log(`Hors ligne : ${todo.artists.length} artiste(s) et ${todo.albums.length} album(s) en attente de métadonnées`); return; }
-    console.log(`Synchronisation : ${todo.artists.length} artiste(s), ${todo.albums.length} album(s), ${todo.texts.length} article(s)`);
+    console.log(`Synchronisation : ${todo.artists.length} artiste(s), ${todo.albums.length} album(s), ${todo.texts.length} classement(s) de titres`);
     for (const ar of todo.artists) { await artistInfo(ar).catch(() => {}); await artistImage(ar, 'thumb'); await artistImage(ar, 'fanart'); }
     for (const al of todo.albums) await albumInfo(al).catch(() => {});
-    await fillFullTexts();
+    for (const ar of todo.texts) { await fetchTopTracks(ar); await sleep(300); }
+    hitIndex = null;
     lastSync = new Date().toISOString();
     const left = missing();
     console.log(`Synchronisation terminée (${left.artists.length + left.albums.length + left.texts.length} élément(s) restant(s))`);
@@ -570,7 +586,7 @@ const server = http.createServer(async (req, res) => {
       return json(res, {
         albums: library.albums.map((a) => { const m = metaMem.get('album-' + a.id) || {}; return { ...a, genres: m.genres || [], label: m.label || null, firstRelease: m.firstRelease || null }; }),
         artists: library.artists.map((a) => { const m = metaMem.get('artist-' + a.id) || {}; return { ...a, tags: m.tags || [], country: m.country || null, area: m.beginArea || null, kind: m.type || null, begin: m.begin || null }; }),
-        tracks: library.tracks.map(({ path: _p, mtime: _m, albumDir: _d, ...t }) => t),
+        tracks: library.tracks.map(({ path: _p, mtime: _m, albumDir: _d, ...t }) => ({ ...t, hit: hitRank(t) })),
         scannedAt: library.scannedAt,
         scanning, scanProgress,
         bytes: library.tracks.reduce((s, t) => s + (t.size || 0), 0),
@@ -636,7 +652,7 @@ if (process.argv.includes('--sync')) {
   await scan();
   await syncMetadata();
   const left = missing();
-  console.log(left.artists.length + left.albums.length + left.texts.length ? `Il reste ${left.artists.length} artiste(s), ${left.albums.length} album(s) et ${left.texts.length} article(s) à récupérer (connexion ?).` : 'Tout est disponible hors ligne.');
+  console.log(left.artists.length + left.albums.length + left.texts.length ? `Il reste ${left.artists.length} artiste(s), ${left.albums.length} album(s) et ${left.texts.length} classement(s) à récupérer (connexion ?).` : 'Tout est disponible hors ligne.');
   process.exit(0);
 } else {
   server.listen(PORT, '127.0.0.1', () => {

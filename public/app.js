@@ -122,6 +122,8 @@ function route() {
   const [name, arg] = h.split('/');
   if (cleanup) { cleanup(); cleanup = null; }
   $$('nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === name || (name === 'album' && a.dataset.nav === 'albums') || (name === 'artist' && a.dataset.nav === 'artists')));
+  document.body.classList.toggle('flow-mode', name === 'flow' || !name);
+  document.body.classList.toggle('tinted', name === 'album');
   view.classList.remove('view-enter'); void view.offsetWidth; view.classList.add('view-enter');
   view.scrollTop = 0;
   if (['flow', 'albums', 'artists', 'tracks'].includes(name)) store.set('lastView', name);
@@ -132,6 +134,16 @@ function route() {
 }
 window.addEventListener('hashchange', () => { nav.remember(currentHash); route(); });
 
+// Fond d'ambiance partagé avec la colonne de gauche (fondu enchaîné entre deux images)
+let ambientIdx = 0;
+function setAmbient(albumId) {
+  const imgs = $$('#ambient img'); const img = imgs[ambientIdx ^= 1];
+  if (img.dataset.id === albumId) return;
+  img.dataset.id = albumId;
+  img.onload = () => { img.classList.add('on'); imgs[ambientIdx ^ 1].classList.remove('on'); };
+  img.src = cover(albumId);
+}
+
 // ---------- Cover Flow (boîtiers de CD en 3D) ----------
 function viewFlow(startId) {
   const albums = LIB.albums;
@@ -140,7 +152,6 @@ function viewFlow(startId) {
   if (cur < 0) cur = Math.floor(Math.random() * albums.length);
   view.innerHTML = `
     <div class="flow">
-      <div class="flow-bg"><img alt=""><img alt=""></div>
       <div class="flow-stage" id="stage" tabindex="0" aria-label="Cover Flow : flèches gauche et droite pour parcourir, OK pour ouvrir"></div>
       <div class="flow-caption"><div class="t"></div><div class="a"></div>
         <div class="flow-actions"><button class="btn glass primary" data-act="play">${ICON.play} Lecture</button><button class="btn glass" data-act="open">Ouvrir l'album</button></div>
@@ -148,7 +159,6 @@ function viewFlow(startId) {
       <div class="flow-scrub"><input type="range" min="0" max="${albums.length - 1}" step="1" value="${cur}"></div>
     </div>`;
   const stage = $('#stage'), cap = $('.flow-caption'), scrub = $('.flow-scrub input');
-  const bgs = $$('.flow-bg img'); let bgi = 0;
   const items = albums.map((a, i) => {
     const el = document.createElement('div');
     el.className = 'cf-item'; el.dataset.i = i;
@@ -205,7 +215,7 @@ function viewFlow(startId) {
     $('.t', cap).textContent = a.title;
     $('.a', cap).innerHTML = `<a href="#/artist/${a.artistId}">${esc(a.artist)}</a>${a.year ? ' · ' + a.year : ''}`;
     clearTimeout(capTimer);
-    capTimer = setTimeout(() => { const img = bgs[bgi ^= 1]; img.onload = () => { img.classList.add('on'); bgs[bgi ^ 1].classList.remove('on'); }; img.src = cover(a.id); }, 160);
+    capTimer = setTimeout(() => setAmbient(a.id), 160);
   }
 
   // Glisser, molette, clic
@@ -279,15 +289,18 @@ function viewAlbums() {
 }
 
 // ---------- Album ----------
-function trackRows(ids, { showArtist, albumArtist } = {}) {
+const STAR = '<span class="hit" title="Titre très connu">★</span>';
+// titre affiché sans les mentions techniques (« - Remastered 2021 », « (Remaster) »)
+const showTitle = (t) => t.replace(/\s*[-–]\s*(\d{4}\s*)?(remaster(ed)?|digital remaster|mono|stereo)(\s+(version|\d{4}))*\s*$/i, '').replace(/\s*[(\[](\d{4}\s*)?(remaster(ed)?|digitally remastered|remastered \d{4}|\d{4} remaster(ed)?)[^)\]]*[)\]]/i, '').trim() || t;
+function trackRows(ids, { showArtist, albumArtist, showAlbum, rank } = {}) {
   let disc = null; const multi = new Set(ids.map((id) => T.get(id).disc)).size > 1;
   return ids.map((id, n) => {
     const t = T.get(id); let head = '';
     if (multi && t.disc !== disc) { disc = t.disc; head = `<tr class="disc-head"><td colspan="3">Disque ${disc}</td></tr>`; }
     const feat = showArtist || (albumArtist && t.artist !== albumArtist);
     return `${head}<tr class="tr ${player.current === id ? 'playing' : ''}" data-track="${id}" data-n="${n}">
-      <td><span class="num">${t.trackNo || n + 1}</span><span class="num-play">${ICON.play}</span>${ICON.eq}</td>
-      <td><div class="tt">${esc(t.title)}</div>${feat ? `<div class="ta">${esc(t.artist)}</div>` : ''}</td>
+      <td><span class="num">${rank ? n + 1 : t.trackNo || n + 1}</span><span class="num-play">${ICON.play}</span>${ICON.eq}</td>
+      <td><div class="tt">${esc(showTitle(t.title))}${t.hit ? STAR : ''}</div>${showAlbum ? `<div class="ta">${esc(t.album)}</div>` : feat ? `<div class="ta">${esc(t.artist)}</div>` : ''}</td>
       <td>${fmtTime(t.duration)}</td></tr>`;
   }).join('');
 }
@@ -303,55 +316,41 @@ function viewAlbum(id) {
         <div class="eyebrow">Album</div>
         <h1>${esc(a.title)}</h1>
         <a class="hero-artist" href="#/artist/${a.artistId}">${esc(a.artist)}</a>
+        <p class="hero-note" id="hero-note"></p>
         <div class="hero-facts">${[a.genre, a.year, `${a.tracks.length} titres`, fmtLong(a.duration)].filter(Boolean).map(esc).join(' · ')} <span class="badge">${esc(a.format)}</span></div>
         <div class="hero-actions"><button class="btn primary" data-act="play" data-autofocus>${ICON.play} Lecture</button><button class="btn soft" data-act="shuffle">${ICON.shuffle} Aléatoire</button></div>
       </div>
     </div>
     <div class="album-body">
       <table class="tracklist"><tbody>${trackRows(a.tracks, { albumArtist: a.artist })}</tbody></table>
-      <div class="about" id="about"><h3>À propos</h3><div class="skeleton" style="width:90%"></div><div class="skeleton"></div><div class="skeleton" style="width:70%"></div></div>
     </div>
     ${others.length ? `<div class="page" style="padding-top:0"><h2>Autres albums de ${esc(a.artist)}</h2><div class="shelf">${others.map(albumCard).join('')}</div></div>` : ''}`;
   onImgLoad(view);
   dominant(a.id).then((c) => view.style.setProperty('--tint', c.join(',')));
+  setAmbient(a.id);
   $('.hero-actions').addEventListener('click', (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act;
     if (act === 'play') player.playList(a.tracks, 0, { shuffle: false });
     if (act === 'shuffle') player.playList(a.tracks, -1, { shuffle: true });
   });
   getInfo('album', a.id).then((info) => {
-    const box = $('#about'); if (!box) return;
-    const d = info.firstRelease; const date = d && (d.length === 10 ? new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' }) : d.slice(0, 4));
-    const facts = [['Première sortie', date], ['Label', info.label], ['Genres', info.genres?.join(', ')], ['Format', a.format], ['Durée', fmtLong(a.duration)]].filter((x) => x[1]);
-    readerData = { kind: 'Album', title: a.title, wiki: info.wiki };
-    box.innerHTML = `<h3>À propos</h3>
-      ${info.pending ? '<p class="muted">Infos pas encore téléchargées. Elles seront récupérées automatiquement dès que le Mac sera connecté à Internet.</p>' : info.wiki ? `<p>${esc(info.wiki.extract)}</p>${readMoreBtn(info.wiki)}` : '<p>Aucune notice trouvée pour cet album.</p>'}
-      <dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
+    const note = $('#hero-note'); if (!note || !info.wiki) return;
+    note.textContent = firstSentence(info.wiki.extract); note.classList.add('on');
   });
 }
 
-// ---------- Lecture d'un article complet, stocké localement ----------
-let readerData = null;
-const SKIP_SECTIONS = /^(notes?( et références)?|références|liens externes|voir aussi|bibliographie|annexes|articles connexes|sources|external links|references|see also|further reading|notes and references|citations)$/i;
-const readMoreBtn = (w) => (w.full && w.full.length > w.extract.length + 200 ? '<button class="read-more" data-read>Lire la suite</button>' : '');
-function openReader() {
-  if (!readerData?.wiki?.full) return;
-  const out = []; let skip = false;
-  for (const line of readerData.wiki.full.split('\n')) {
-    const m = line.match(/^(={2,4})\s*(.+?)\s*\1$/);
-    if (m) { skip = SKIP_SECTIONS.test(m[2]); if (!skip) out.push(m[1].length === 2 ? `<h3>${esc(m[2])}</h3>` : `<h4>${esc(m[2])}</h4>`); continue; }
-    if (!skip && line.trim()) out.push(`<p>${esc(line)}</p>`);
+// Première phrase d'un résumé Wikipédia (sans prononciation ni parenthèses encombrantes)
+function firstSentence(text) {
+  if (!text) return '';
+  const t = text.replace(/\s*\[[^\]]*[ˈˌːæɪəɛʊʃʒθðŋɔɑʁ][^\]]*\]/g, '').replace(/\s*\((?:[^()]*?(?:écouter|prononc|\/|ˈ|API)[^()]*?)\)/g, '').replace(/\(\s*\)/g, '').replace(/\s+/g, ' ').trim();
+  const re = /[.!?](?=\s+[A-ZÀ-ÖØ-Þ«"“])/g; let m;
+  while ((m = re.exec(t))) {
+    const before = t.slice(Math.max(0, m.index - 4), m.index);
+    if (/(^|[\s.(-])[A-Z]$/.test(before) || /\b(St|Dr|Mr|Jr|av|J\.-C|etc|cf|vol|no)$/i.test(before)) continue; // initiales, abréviations
+    return t.slice(0, m.index + 1);
   }
-  $('#reader-kind').textContent = readerData.kind;
-  $('#reader-title').textContent = readerData.title;
-  $('#reader-body').innerHTML = out.join('');
-  $('#reader-body').scrollTop = 0;
-  $('#reader').classList.add('open'); $('#reader').setAttribute('aria-hidden', 'false');
-  $('#reader-body').focus({ preventScroll: true });
+  return t;
 }
-function closeReader() { $('#reader').classList.remove('open'); $('#reader').setAttribute('aria-hidden', 'true'); nav.focusEl($('[data-read]')); }
-$('#reader-close').onclick = closeReader;
-$('#reader').addEventListener('click', (e) => { if (e.target.id === 'reader') closeReader(); });
 
 // ---------- Artistes ----------
 const PAYS = { 'United States': 'États-Unis', 'United Kingdom': 'Royaume-Uni', England: 'Angleterre', Scotland: 'Écosse', Germany: 'Allemagne', Sweden: 'Suède', Greece: 'Grèce', Australia: 'Australie', Ireland: 'Irlande', Italy: 'Italie', Norway: 'Norvège', Finland: 'Finlande', Netherlands: 'Pays-Bas', Spain: 'Espagne', Belgium: 'Belgique', Switzerland: 'Suisse', Brazil: 'Brésil', Japan: 'Japon', Denmark: 'Danemark', Austria: 'Autriche', Poland: 'Pologne', 'New Zealand': 'Nouvelle-Zélande', Jamaica: 'Jamaïque', Mexico: 'Mexique', Russia: 'Russie' };
@@ -386,6 +385,10 @@ function viewArtist(id) {
   const allTracks = albums.flatMap((a) => a.tracks);
   const total = albums.reduce((s, a) => s + a.duration, 0);
   const last = albums[albums.length - 1];
+  // un tube présent sur plusieurs albums (studio, live, best of) n'est listé qu'une fois
+  const seen = new Set();
+  const popular = allTracks.map((id) => T.get(id)).filter((t) => t.hit).sort((x, y) => y.hit - x.hit)
+    .filter((t) => { const k = t.title.toLowerCase().replace(/\s*[\[(-].*$/, '').trim(); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8).map((t) => t.id);
   view.innerHTML = `
     <div class="artist-hero"><img class="bgblur" src="${cover(last.id)}" alt=""><img class="bgimg" alt="">
       <div class="inner"><div><div class="eyebrow" style="color:rgba(255,255,255,.7)" id="ar-type">Artiste</div><h1>${esc(ar.name)}</h1></div>
@@ -395,10 +398,11 @@ function viewArtist(id) {
         <div class="fact"><small>Dans la bibliothèque</small><b>${albums.length} album${albums.length > 1 ? 's' : ''} · ${allTracks.length} titres</b></div>
         <div class="fact"><small>Durée d'écoute</small><b>${fmtLong(total)}</b></div>
       </div>
+      <p class="lead" id="bio"></p>
+      ${popular.length ? `<h2>Titres populaires</h2><table class="tracklist popular"><tbody>${trackRows(popular, { showAlbum: true, rank: true })}</tbody></table>` : ''}
       <h2>Discographie</h2>
       <div class="shelf">${albums.map(albumCard).join('')}</div>
-      <div id="bio"><h2>Biographie</h2><div class="skeleton" style="max-width:800px"></div><div class="skeleton" style="max-width:700px"></div><div class="skeleton" style="max-width:760px"></div></div>
-      <h2>Titres</h2>
+      <h2>Tous les titres</h2>
       <table class="tracklist"><tbody>${trackRows(allTracks.slice(0, 400), { showArtist: false })}</tbody></table>
     </div>`;
   onImgLoad(view);
@@ -421,11 +425,7 @@ function viewArtist(id) {
       ['Fans Deezer', info.fans && info.fans.toLocaleString('fr-FR')],
     ].filter((f) => f[1]);
     $('#facts').insertAdjacentHTML('beforeend', facts.map(([k, v]) => `<div class="fact"><small>${k}</small><b>${esc(v)}</b></div>`).join(''));
-    const tags = [...new Set([...(ar.genres || []), ...(info.tags || [])].map((t) => t.toLowerCase()))].slice(0, 8);
-    readerData = { kind: 'Biographie', title: ar.name, wiki: info.wiki };
-    $('#bio').innerHTML = `<h2>Biographie</h2>
-      ${tags.length ? `<div class="chips" style="margin-bottom:14px">${tags.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
-      ${info.pending ? '<p class="muted">Infos pas encore téléchargées. Elles seront récupérées automatiquement dès que le Mac sera connecté à Internet.</p>' : info.wiki ? `<p class="bio">${esc(info.wiki.extract)}</p>${readMoreBtn(info.wiki)}` : '<p class="bio">Aucune biographie trouvée.</p>'}`;
+    if (info.wiki) $('#bio').textContent = firstSentence(info.wiki.extract);
   });
 }
 
@@ -445,7 +445,7 @@ function viewTracks(_, filtered) {
     const html = `<table class="songs"><colgroup><col style="width:38%"><col style="width:22%"><col style="width:26%"><col style="width:7%"><col style="width:7%"></colgroup>
       <thead><tr>${th('title', 'Titre')}${th('artist', 'Artiste')}${th('album', 'Album')}${th('year', 'Année', 'r')}${th('duration', 'Durée', 'r')}</tr></thead>
       <tbody>${list.map((t, n) => `<tr data-track="${t.id}" data-n="${n}" class="${player.current === t.id ? 'playing' : ''}">
-        <td><div class="cell-title"><img loading="lazy" src="${cover(t.albumId)}" alt=""><span class="tt">${esc(t.title)}</span></div></td>
+        <td><div class="cell-title"><img loading="lazy" src="${cover(t.albumId)}" alt=""><span class="tt">${esc(showTitle(t.title))}</span>${t.hit ? STAR : ''}</div></td>
         <td><a href="#/artist/${t.artistId}">${esc(t.artist)}</a></td><td><a href="#/album/${t.albumId}">${esc(t.album)}</a></td>
         <td class="r">${t.year || ''}</td><td class="r">${fmtTime(t.duration)}</td></tr>`).join('')}</tbody></table>`;
     return { html, ids };
@@ -472,28 +472,45 @@ function setSearch(q) {
   history.replaceState(null, '', `#/search/${encodeURIComponent(q)}`);
   route();
 }
+// Page « Rechercher » : grandes tuiles illustrées (décennies, styles), comme dans Apple Music
+const STYLES = [
+  ['Rock', 'rock'], ['Metal', 'metal'], ['Hard rock', 'hard rock'], ['Pop', 'pop'], ['Blues', 'blues'], ['Rap & hip‑hop', 'rap'],
+  ['Électro', 'electro'], ['Chanson française', 'chanson'], ['Soul', 'soul'], ['Piano & classique', 'piano'], ['Punk', 'punk'], ['Grunge', 'grunge'],
+];
 function browseHTML() {
   const idx = getIndex();
-  const genres = idx.genres.filter((g) => g.length < 24).slice(0, 18);
-  const decadeColor = (d) => ({ 1960: '255,159,10', 1970: '255,214,10', 1980: '255,55,95', 1990: '191,90,242', 2000: '10,132,255', 2010: '48,209,88', 2020: '100,210,255' }[d] || '142,142,147');
-  return `<div class="browse">
-    <section><h2>Par décennie</h2><div class="chip-row">${idx.decades.map((d) => `<button data-chip="années ${String(d).slice(d < 2000 ? 2 : 0)}" class="decade" style="--c:${decadeColor(d)}">${d < 2000 ? `${String(d).slice(2)}’s` : `${d}s`}</button>`).join('')}</div></section>
-    <section><h2>Par style</h2><div class="chip-row">${genres.map((g) => `<button data-chip="${esc(g)}">${esc(g.replace(/^./, (c) => c.toUpperCase()))}</button>`).join('')}</div></section>
-    <section><h2>Par pays</h2><div class="chip-row">${idx.countries.map((c) => `<button data-chip="${esc(fr(c))}">${esc(fr(c))}</button>`).join('')}</div></section>
-    <section class="examples">Tapez ou dites quelques mots, même approximatifs :
-      ${['metal allemand', 'années 80', 'rhcp', '1986', 'rap', 'groupe suédois', 'joue Renaud'].map((x) => `<kbd data-chip="${x}">${x}</kbd>`).join(' ')}</section>
-  </div>`;
+  const tile = (q, label, sub, covers, cls = '') => `<button class="tile ${cls}" data-chip="${esc(q)}" data-tint="${covers[0] || ''}">
+      <span class="tile-label">${label}</span><span class="tile-sub">${sub}</span>
+      <span class="tile-art">${covers.slice(0, 3).map((id, i) => `<img src="${cover(id)}" alt="" style="--i:${i}">`).join('')}</span></button>`;
+  const decades = idx.decades.map((d) => {
+    const albums = LIB.albums.filter((a) => a.year >= d && a.year < d + 10);
+    const picks = []; for (const a of albums) if (!picks.some((x) => A.get(x).artistId === a.artistId)) picks.push(a.id); // artistes variés
+    const label = d < 2000 ? `Années ${String(d).slice(2)}` : `Années ${d}`;
+    return albums.length ? tile(label.toLowerCase(), label, `${albums.length} album${albums.length > 1 ? 's' : ''}`, picks.sort(() => 0.5 - Math.random())) : '';
+  }).join('');
+  const styles = STYLES.map(([label, q]) => {
+    const r = runSearch(idx, q);
+    return r.albums.length >= 2 ? { label, q, n: r.albums.length, covers: r.albums.slice(0, 3).map((a) => a.id) } : null;
+  }).filter(Boolean).sort((a, b) => b.n - a.n).slice(0, 10)
+    .map((x) => tile(x.q, x.label, `${x.n} albums`, x.covers, 'style')).join('');
+  return `<section><h2>Décennies</h2><div class="tiles">${decades}</div></section>
+    <section><h2>Styles</h2><div class="tiles">${styles}</div></section>`;
+}
+function tintTiles() {
+  for (const t of $$('.tile[data-tint]', view)) if (t.dataset.tint) dominant(t.dataset.tint).then((c) => t.style.setProperty('--c', c.join(',')));
 }
 function viewSearch(q) {
   q = q || '';
   if ($('#search').value !== q && document.activeElement !== $('#search')) $('#search').value = q;
   if (!q.trim()) {
-    view.innerHTML = `<div class="page"><div class="page-head"><h1>Rechercher</h1>
-      <button class="btn soft voice-cta" data-voice data-autofocus>${MIC} Recherche vocale</button></div>${browseHTML()}</div>`;
+    view.innerHTML = `<div class="page search-page"><div class="page-head"><div><h1>Rechercher</h1>
+      <p class="muted search-tip">Un artiste, un style, une année, une décennie… quelques lettres suffisent.</p></div>
+      <button class="btn soft voice-cta" data-voice>${MIC} Recherche vocale</button></div>${browseHTML()}</div>`;
+    tintTiles();
     return;
   }
   const r = runSearch(getIndex(), q);
-  const facets = [...r.labels.map((l) => `<span class="facet">${esc(l)}</span>`), ...r.ignored.map((w) => `<span class="facet ignored" title="Mot ignoré : aucun résultat">${esc(w)}</span>`)].join('');
+  const facets = [r.labels.join(' · '), r.ignored.length ? `sans tenir compte de « ${r.ignored.join(' ')} »` : ''].filter(Boolean).map(esc).join(' — ');
   let top = '';
   if (r.top) {
     const it = r.top.item;
@@ -506,12 +523,13 @@ function viewSearch(q) {
   const nothing = !r.artists.length && !r.albums.length && !r.tracks.length;
   view.innerHTML = `<div class="page">
     <div class="search-head"><h1>${nothing ? 'Aucun résultat' : 'Résultats'}</h1><span class="muted">« ${esc(q)} »</span></div>
-    ${facets ? `<div class="facets">${facets}</div>` : ''}
+    ${facets ? `<p class="search-sub">${facets}</p>` : ''}
     ${top ? `<h2>Meilleur résultat</h2>${top}` : ''}
     ${r.artists.length ? `<h2>Artistes</h2><div class="artist-grid">${r.artists.slice(0, 24).map(artistCard).join('')}</div>` : ''}
     ${r.albums.length ? `<h2>Albums <span class="muted" style="font-size:14px;font-weight:400">${r.albums.length}</span></h2><div class="grid">${r.albums.map(albumCard).join('')}</div>` : ''}
     ${r.tracks.length ? `<h2>Titres <span class="muted" style="font-size:14px;font-weight:400">${r.tracks.length} · double-clic ou OK pour lire</span></h2><div id="songs-box"></div>` : ''}
     ${nothing ? `<p class="muted">Essayez un autre mot, ou parcourez :</p>${browseHTML()}` : ''}</div>`;
+  if (nothing) tintTiles();
   if (r.tracks.length) viewTracks(null, r.tracks.slice(0, 300))();
   onImgLoad(view);
   if (r.top) dominant(r.top.kind === 'album' ? r.top.item.id : r.top.item.albums?.at(-1) || r.top.item.albumId).then((c) => view.style.setProperty('--tint', c.join(',')));
@@ -577,7 +595,6 @@ view.addEventListener('click', (e) => { if (e.target.closest('[data-voice]')) st
 
 // ---------- Clics globaux dans les vues ----------
 view.addEventListener('click', (e) => {
-  if (e.target.closest('[data-read]')) { openReader(); return; }
   const chip = e.target.closest('[data-chip]'); if (chip) { setSearch(chip.dataset.chip); return; }
   const playBtn = e.target.closest('[data-play-album]');
   if (playBtn) { e.stopPropagation(); player.playList(A.get(playBtn.dataset.playAlbum).tracks, 0); return; }
@@ -740,7 +757,6 @@ np.addEventListener('pointermove', (e) => {
 const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
 function goBack() {
   if ($('#voice').classList.contains('open')) return stopVoice();
-  if ($('#reader').classList.contains('open')) return closeReader();
   if ($('#queue').classList.contains('open')) { $('#q-close').click(); return nav.focusEl($('#b-queue')); }
   if (np.classList.contains('open')) { closeNP(); return nav.focusEl($('#p-now')); }
   if (/^#\/?(album|artist|search)/.test(location.hash) && history.length > 1) return history.back();
@@ -773,7 +789,6 @@ window.addEventListener('keydown', (e) => {
     e.preventDefault();
     const a = document.activeElement;
     if (a?.matches('.slider') && (k === 'ArrowLeft' || k === 'ArrowRight')) return adjustSlider(a, ARROWS[k]);
-    if (a?.id === 'reader-body' && (k === 'ArrowUp' || k === 'ArrowDown')) { a.scrollBy({ top: k === 'ArrowDown' ? 120 : -120, behavior: 'smooth' }); return; }
     return nav.move(ARROWS[k]);
   }
   if (k === 'Enter') {

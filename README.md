@@ -22,9 +22,14 @@ qui peut être supprimé sans risque.
 
 - L'interface ne lit que le cache local et ne contacte jamais Internet.
 - Le dossier de musique est surveillé : un album ajouté est indexé ~20 s après la fin de la copie,
-  puis ses infos sont rapatriées une seule fois (MusicBrainz → Wikidata → Wikipédia pour les biographies
-  complètes, TheAudioDB pour les photos, Deezer pour le label). Sans réseau, nouvel essai toutes les 15 min.
+  puis ses infos sont rapatriées une seule fois (MusicBrainz → Wikidata → Wikipédia pour la présentation,
+  TheAudioDB pour les photos, Deezer pour le label et la popularité des titres). Sans réseau, nouvel essai toutes les 15 min.
 - `npm run sync` : indexe, télécharge ce qui manque, puis s'arrête.
+
+## Titres très connus
+
+Une étoile ★ signale les grands classiques (classement de popularité Deezer ≥ 800 000 : *Nothing Else Matters*,
+*Seven Nation Army*, *Mistral gagnant*…). Chaque page d'artiste commence par ses titres populaires.
 
 ## Recherche
 
