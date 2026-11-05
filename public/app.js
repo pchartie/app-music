@@ -18,6 +18,13 @@ const T = new Map(), A = new Map(), R = new Map();
 
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600); }
 
+function metaState(m) {
+  if (!m) return '—';
+  const n = m.pendingArtists + m.pendingAlbums;
+  if (!n) return '<span style="color:#30d158">● Prêtes hors ligne</span>';
+  if (m.syncing) return `Téléchargement… (${n})`;
+  return m.online === false ? `${n} en attente (réseau)` : `${n} en attente`;
+}
 async function loadLibrary() {
   const r = await fetch('/api/library').then((x) => x.json());
   LIB = r;
@@ -32,7 +39,8 @@ async function loadLibrary() {
   const lossless = r.tracks.length && r.tracks.every((t) => t.lossless) ? 'FLAC sans perte' : 'Mixte';
   const when = r.scanning ? `Indexation ${r.scanProgress.done}/${r.scanProgress.total}` : r.scannedAt ? new Date(r.scannedAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
   $('#lib-meta').innerHTML = `<div><span>Taille</span><span>${(r.bytes / 1e9).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go</span></div>
-    <div><span>Qualité</span><span>${lossless}</span></div><div><span>Dossier</span><span>${esc(r.folder || '')}</span></div><div><span>Mise à jour</span><span>${when}</span></div>`;
+    <div><span>Qualité</span><span>${lossless}</span></div><div><span>Dossier</span><span>${esc(r.folder || '')}</span></div><div><span>Mise à jour</span><span>${when}</span></div>
+    <div><span>Infos</span><span>${metaState(r.meta)}</span></div>`;
   return r;
 }
 
@@ -93,7 +101,7 @@ function getInfo(kind, id) {
   const key = kind + id;
   if (!infoCache.has(key)) {
     infoCache.set(key, new Promise((res) => {
-      const run = () => { inflight++; fetch(`/api/${kind}/${id}`).then((r) => r.json()).catch(() => ({})).then((d) => { inflight--; res(d); waiting.shift()?.(); }); };
+      const run = () => { inflight++; fetch(`/api/${kind}/${id}`).then((r) => r.json()).catch(() => ({ pending: true })).then((d) => { inflight--; if (d.pending) infoCache.delete(key); res(d); waiting.shift()?.(); }); };
       inflight < 4 ? run() : waiting.push(run);
     }));
   }
@@ -126,7 +134,7 @@ function viewFlow(startId) {
       <div class="flow-bg"><img alt=""><img alt=""></div>
       <div class="flow-stage" id="stage"></div>
       <div class="flow-caption"><div class="t"></div><div class="a"></div>
-        <div class="flow-actions"><button class="btn glass primary" data-act="play">${ICON.play} Lecture</button><button class="btn glass" data-act="flip">Titres</button><button class="btn glass" data-act="open">Ouvrir l'album</button></div>
+        <div class="flow-actions"><button class="btn glass primary" data-act="play">${ICON.play} Lecture</button><button class="btn glass" data-act="open">Ouvrir l'album</button></div>
       </div>
       <div class="flow-scrub"><input type="range" min="0" max="${albums.length - 1}" step="1" value="${cur}"></div>
     </div>`;
@@ -147,7 +155,7 @@ function viewFlow(startId) {
     stage.appendChild(el);
     return el;
   });
-  let S = 300, W = 324, pos = cur, target = cur, raf = null, flipped = null, open = 0, openTarget = 0;
+  let S = 300, W = 324, pos = cur, target = cur, raf = null;
   const colored = new Set();
 
   const resize = () => {
@@ -163,13 +171,8 @@ function viewFlow(startId) {
       el.style.display = '';
       if (!colored.has(i)) { colored.add(i); dominant(albums[i].id).then((c) => el.style.setProperty('--sc', c.map((v) => Math.round(v * 0.75)).join(','))); }
       const s = Math.sign(d), c = Math.min(a, 1);
-      // quand un boîtier est ouvert, ses voisins s'écartent pour lui laisser la place
-      const spread = W * 0.62 + open * W * 0.7;
-      const x = s * (c * spread + Math.max(0, a - 1) * W * 0.22);
-      const isOpen = i === flipped;
-      const z = isOpen ? open * S * 0.32 : -c * S * 0.55;
-      const sc = isOpen ? 1 + open * 0.3 : 1;
-      el.style.transform = `translate3d(${x}px,${isOpen ? -open * S * 0.04 : 0}px,${z}px) rotateY(${-s * c * 64}deg) scale(${sc})`;
+      const x = s * (c * W * 0.62 + Math.max(0, a - 1) * W * 0.22);
+      el.style.transform = `translate3d(${x}px,0,${-c * S * 0.55}px) rotateY(${-s * c * 64}deg)`;
       el.style.zIndex = 1000 - Math.round(a * 10);
       el._shade.style.opacity = Math.min(0.6, a * 0.13);
     }
@@ -178,15 +181,14 @@ function viewFlow(startId) {
     const diff = target - pos;
     pos += diff * 0.15;
     if (Math.abs(diff) < 0.0008) pos = target;
-    open += (openTarget - open) * 0.12;
-    if (Math.abs(openTarget - open) < 0.002) open = openTarget;
     render();
     const i = Math.round(pos);
     if (i !== cur) { cur = i; updateCaption(); }
-    raf = pos !== target || open !== openTarget ? requestAnimationFrame(animate) : null;
+    raf = pos !== target ? requestAnimationFrame(animate) : null;
   }
   const kick = () => { if (!raf) raf = requestAnimationFrame(animate); };
-  const go = (t) => { target = Math.max(0, Math.min(albums.length - 1, t)); if (flipped !== null && Math.round(target) !== flipped) unflip(); kick(); };
+  const go = (t) => { target = Math.max(0, Math.min(albums.length - 1, t)); kick(); };
+  const openAlbum = (i) => { location.hash = `#/album/${albums[i].id}`; };
   let capTimer;
   function updateCaption() {
     const a = albums[cur];
@@ -196,20 +198,10 @@ function viewFlow(startId) {
     clearTimeout(capTimer);
     capTimer = setTimeout(() => { const img = bgs[bgi ^= 1]; img.onload = () => { img.classList.add('on'); bgs[bgi ^ 1].classList.remove('on'); }; img.src = cover(a.id); }, 160);
   }
-  function flip(i) {
-    const a = albums[i], el = items[i], back = $('.f.back', el);
-    back.innerHTML = `<img class="back-blur" src="${cover(a.id)}" alt="">
-      <header><img src="${cover(a.id)}" alt=""><div style="min-width:0"><b>${esc(a.title)}</b><span>${esc(a.artist)}${a.year ? ' · ' + a.year : ''} · ${a.tracks.length} titres · ${fmtLong(a.duration)}</span></div></header>
-      <ol>${a.tracks.map((id, n) => { const t = T.get(id); return `<li data-track="${id}" data-n="${n}" class="${player.current === id ? 'playing' : ''}"><span>${t.trackNo || n + 1}</span><span>${esc(t.title)}</span><span>${fmtTime(t.duration)}</span></li>`; }).join('')}</ol>`;
-    el.classList.add('flipped'); flipped = i; openTarget = 1; kick();
-  }
-  function unflip() { if (flipped !== null) items[flipped].classList.remove('flipped'); openTarget = 0; kick(); setTimeout(() => { if (openTarget === 0) flipped = null; }, 700); }
-  const isFlipped = (i) => flipped === i && openTarget === 1;
 
   // Glisser, molette, clic
   let drag = null;
   stage.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('.f.back')) return;
     drag = { x: e.clientX, start: target, moved: false, t: performance.now(), lastX: e.clientX, v: 0 };
     stage.setPointerCapture(e.pointerId); stage.classList.add('dragging');
   });
@@ -226,37 +218,28 @@ function viewFlow(startId) {
     const d = drag; drag = null;
     if (d.moved) { go(Math.round(target - d.v * 4)); return; }
     const item = document.elementsFromPoint(e.clientX, e.clientY).map((n) => n.closest?.('.cf-item')).find(Boolean);
-    if (!item) { if (flipped !== null) unflip(); return; }
+    if (!item) return;
     const i = +item.dataset.i;
-    if (i === Math.round(pos)) isFlipped(i) ? unflip() : flip(i); else go(i);
+    if (i === Math.round(pos)) openAlbum(i); else go(i);
   });
-  stage.addEventListener('dblclick', (e) => { if (!e.target.closest('.f.back')) location.hash = `#/album/${albums[cur].id}`; });
   let wheelSnap;
   stage.addEventListener('wheel', (e) => {
-    if (e.target.closest('.f.back ol')) return;
     e.preventDefault();
     const d = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : e.deltaY;
     go(target + d / 110);
     clearTimeout(wheelSnap); wheelSnap = setTimeout(() => go(Math.round(target)), 140);
   }, { passive: false });
-  stage.addEventListener('click', (e) => {
-    const li = e.target.closest('.f.back li'); if (!li) return;
-    player.playList(albums[flipped].tracks, +li.dataset.n);
-    $$('.f.back li').forEach((x) => x.classList.toggle('playing', x === li));
-  });
   scrub.addEventListener('input', () => go(+scrub.value));
   cap.addEventListener('click', (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act; const a = albums[cur];
     if (act === 'play') player.playList(a.tracks, 0);
     if (act === 'open') location.hash = `#/album/${a.id}`;
-    if (act === 'flip') { go(cur); isFlipped(cur) ? unflip() : flip(cur); }
   });
   const onKey = (e) => {
     if (e.target.matches('input:not([type=range])')) return;
     if (e.key === 'ArrowRight') { e.preventDefault(); go(Math.round(target) + 1); }
     if (e.key === 'ArrowLeft') { e.preventDefault(); go(Math.round(target) - 1); }
-    if (e.key === 'Enter') { isFlipped(cur) ? unflip() : flip(cur); }
-    if (e.key === 'Escape' && flipped !== null) unflip();
+    if (e.key === 'Enter') openAlbum(cur);
   };
   window.addEventListener('keydown', onKey);
   const ro = new ResizeObserver(resize); ro.observe(stage);
@@ -327,7 +310,7 @@ function viewAlbum(id) {
     const d = info.firstRelease; const date = d && (d.length === 10 ? new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' }) : d.slice(0, 4));
     const facts = [['Première sortie', date], ['Label', info.label], ['Genres', info.genres?.join(', ')], ['Format', a.format], ['Durée', fmtLong(a.duration)]].filter((x) => x[1]);
     box.innerHTML = `<h3>À propos</h3>
-      ${info.wiki ? `<p>${esc(info.wiki.extract)}</p><a class="ext" href="${esc(info.wiki.url)}" target="_blank" rel="noopener">Lire la suite sur Wikipédia ↗</a>` : '<p>Aucune notice trouvée pour cet album.</p>'}
+      ${info.pending ? '<p class="muted">Infos pas encore téléchargées. Elles seront récupérées automatiquement dès que le Mac sera connecté à Internet.</p>' : info.wiki ? `<p>${esc(info.wiki.extract)}</p><a class="ext" href="${esc(info.wiki.url)}" target="_blank" rel="noopener">Lire la suite sur Wikipédia ↗</a>` : '<p>Aucune notice trouvée pour cet album.</p>'}
       <dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
   });
 }
@@ -403,7 +386,7 @@ function viewArtist(id) {
     const tags = [...new Set([...(ar.genres || []), ...(info.tags || [])].map((t) => t.toLowerCase()))].slice(0, 8);
     $('#bio').innerHTML = `<h2>Biographie</h2>
       ${tags.length ? `<div class="chips" style="margin-bottom:14px">${tags.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
-      ${info.wiki ? `<p class="bio">${esc(info.wiki.extract)}</p><a class="ext link-btn" href="${esc(info.wiki.url)}" target="_blank" rel="noopener">Lire la suite sur Wikipédia ↗</a>` : '<p class="bio">Aucune biographie trouvée.</p>'}`;
+      ${info.pending ? '<p class="muted">Infos pas encore téléchargées. Elles seront récupérées automatiquement dès que le Mac sera connecté à Internet.</p>' : info.wiki ? `<p class="bio">${esc(info.wiki.extract)}</p><a class="ext link-btn" href="${esc(info.wiki.url)}" target="_blank" rel="noopener">Lire la suite sur Wikipédia ↗</a>` : '<p class="bio">Aucune biographie trouvée.</p>'}`;
   });
 }
 
@@ -646,6 +629,20 @@ $('#rescan').onclick = async () => {
   toast('Actualisation de la bibliothèque…');
   const poll = setInterval(async () => { const r = await loadLibrary(); if (!r.scanning) { clearInterval(poll); $('#rescan').classList.remove('spin'); toast('Bibliothèque à jour'); route(); } }, 1500);
 };
+
+// Nouveaux albums détectés pendant que la page est ouverte
+setInterval(async () => {
+  try {
+    const st = await fetch('/api/status').then((r) => r.json());
+    const before = LIB.albums.length;
+    if (st.scannedAt !== LIB.scannedAt && !st.scanning) {
+      await loadLibrary();
+      const added = LIB.albums.length - before;
+      if (added > 0) toast(added > 1 ? `${added} nouveaux albums ajoutés` : 'Nouvel album ajouté');
+      if (!/^#\/?(album|artist)\//.test(location.hash) && !document.querySelector('.flow')) route();
+    } else if (JSON.stringify(st.meta) !== JSON.stringify(LIB.meta)) { LIB.meta = st.meta; $('#lib-meta').lastElementChild.lastElementChild.innerHTML = metaState(st.meta); }
+  } catch {}
+}, 10000);
 
 // ---------- Démarrage ----------
 (async () => {

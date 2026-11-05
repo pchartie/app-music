@@ -14,7 +14,7 @@ const exec = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const MUSIC_DIR = process.env.MUSIC_DIR || path.join(os.homedir(), 'Downloads');
 const PORT = Number(process.env.PORT || 4321);
-const CACHE = path.join(ROOT, 'cache');
+const CACHE = process.env.DISCO_CACHE || path.join(ROOT, 'cache');
 const COVERS = path.join(CACHE, 'covers');
 const META = path.join(CACHE, 'meta');
 const ARTIST_IMG = path.join(CACHE, 'artists');
@@ -22,6 +22,7 @@ const LIB_FILE = path.join(CACHE, 'library.json');
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
 const UA = 'Discotheque/1.0 (application musicale locale)';
 
+if (process.env.DISCO_OFFLINE) globalThis.fetch = async () => { throw new TypeError('hors ligne (simulé)'); };
 for (const d of [CACHE, COVERS, META, ARTIST_IMG]) fs.mkdirSync(d, { recursive: true });
 
 const hash = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 12);
@@ -165,7 +166,7 @@ async function scan() {
   };
   await fsp.writeFile(LIB_FILE, JSON.stringify(library));
   scanning = false;
-  setTimeout(prewarm, 2000);
+  setTimeout(syncMetadata, 1000);
   console.log(`Indexation : ${tracks.length} titres, ${albums.size} albums, ${artists.size} artistes en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 
@@ -352,7 +353,7 @@ async function audiodb(ar) {
       const r = await audiodbFetch(`https://www.theaudiodb.com/api/v1/json/123/search.php?s=${encodeURIComponent(ar.name)}`);
       const a = (r.artists || []).find((x) => norm(x.strArtist) === norm(ar.name)) || r.artists?.[0];
       return { data: { thumb: a?.strArtistThumb || null, fanart: a?.strArtistFanart || a?.strArtistFanart2 || a?.strArtistWideThumb || null }, complete: true };
-    } catch { return { data: {}, complete: false }; }
+    } catch { return { data: { failed: true }, complete: false }; }
   });
 }
 const imgJobs = new Map();
@@ -363,12 +364,14 @@ function artistImage(ar, kind) {
   const key = ar.id + kind;
   if (!imgJobs.has(key)) imgJobs.set(key, (async () => {
     const adb = await audiodb(ar);
+    if (adb.failed) { imgJobs.delete(key); return null; } // hors ligne : on réessaiera
     let url = kind === 'thumb' ? adb.thumb : adb.fanart;
     if (!url && kind === 'thumb') {
-      try { url = JSON.parse(await fsp.readFile(path.join(META, 'artist-' + ar.id + '.json'), 'utf8')).wiki?.image; } catch {}
-      if (!url) url = (await artistInfo(ar)).wiki?.image;
+      const info = await readMeta('artist-' + ar.id);
+      if (!info) { imgJobs.delete(key); return null; } // fiche pas encore récupérée
+      url = info.wiki?.image;
     }
-    if (!url) { await fsp.writeFile(dest + '.none', ''); return null; }
+    if (!url) { await fsp.writeFile(dest + '.none', ''); imgJobs.delete(key); return null; }
     const tmp = dest + '.src';
     try {
       const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
@@ -449,17 +452,54 @@ async function albumInfo(al) {
   });
 }
 
-// Préchargement discret des métadonnées après l'indexation
-let prewarming = false;
-let lastUserRequest = 0;
-const yieldToUser = async () => { while (Date.now() - lastUserRequest < 5000) await sleep(500); };
-async function prewarm() {
-  if (prewarming) return;
-  prewarming = true;
-  for (const ar of library.artists) { try { await yieldToUser(); await artistInfo(ar); await artistImage(ar, 'thumb'); await artistImage(ar, 'fanart'); } catch {} }
-  for (const al of library.albums) { try { await yieldToUser(); await albumInfo(al); } catch {} }
-  prewarming = false;
-  console.log('Métadonnées en ligne : à jour');
+// ---------- Synchronisation des métadonnées (seul endroit qui touche Internet) ----------
+// L'interface ne lit que le cache local : l'app fonctionne entièrement hors ligne.
+// Quand un album/artiste n'a pas encore ses infos, elles sont rapatriées ici, une seule fois.
+async function readMeta(key) { try { return JSON.parse(await fsp.readFile(path.join(META, key + '.json'), 'utf8')); } catch { return null; } }
+const hasMeta = (key) => fs.existsSync(path.join(META, key + '.json'));
+const hasImg = (ar, kind) => fs.existsSync(path.join(ARTIST_IMG, `${ar.id}-${kind}.jpg`)) || fs.existsSync(path.join(ARTIST_IMG, `${ar.id}-${kind}.jpg.none`));
+function missing() {
+  return {
+    artists: library.artists.filter((ar) => !hasMeta('artist-' + ar.id) || !hasImg(ar, 'thumb') || !hasImg(ar, 'fanart')),
+    albums: library.albums.filter((al) => !hasMeta('album-' + al.id)),
+  };
+}
+async function isOnline() {
+  try { await fetch('https://musicbrainz.org/', { method: 'HEAD', signal: AbortSignal.timeout(5000) }); return true; } catch { return false; }
+}
+let syncing = false, lastSync = null, online = null;
+async function syncMetadata() {
+  if (syncing) return;
+  const todo = missing();
+  if (!todo.artists.length && !todo.albums.length) { online = online ?? null; return; }
+  syncing = true;
+  try {
+    online = await isOnline();
+    if (!online) { console.log(`Hors ligne : ${todo.artists.length} artiste(s) et ${todo.albums.length} album(s) en attente de métadonnées`); return; }
+    console.log(`Synchronisation : ${todo.artists.length} artiste(s), ${todo.albums.length} album(s)`);
+    for (const ar of todo.artists) { await artistInfo(ar).catch(() => {}); await artistImage(ar, 'thumb'); await artistImage(ar, 'fanart'); }
+    for (const al of todo.albums) await albumInfo(al).catch(() => {});
+    lastSync = new Date().toISOString();
+    const left = missing();
+    console.log(`Synchronisation terminée (${left.artists.length + left.albums.length} élément(s) restant(s))`);
+  } finally { syncing = false; }
+}
+// Réessaie régulièrement s'il reste des éléments (ex. connexion revenue)
+setInterval(syncMetadata, 15 * 60 * 1000).unref();
+
+// ---------- Surveillance du dossier de musique ----------
+let rescanTimer = null;
+function scheduleRescan(delay = 20000) { clearTimeout(rescanTimer); rescanTimer = setTimeout(() => scan(), delay); }
+function watchMusic() {
+  try {
+    fs.watch(MUSIC_DIR, { recursive: true }, (_ev, file) => {
+      if (!file) return;
+      const ext = path.extname(file).toLowerCase();
+      // nouveaux fichiers audio, images de pochette ou dossiers : on réindexe une fois la copie terminée
+      if (AUDIO_EXT.has(ext) || /\.(jpe?g|png)$/i.test(ext) || !ext) scheduleRescan();
+    });
+    console.log('Surveillance de', MUSIC_DIR);
+  } catch (e) { console.warn('Surveillance impossible :', e.message); }
 }
 
 // ---------- HTTP ----------
@@ -491,7 +531,6 @@ function sendFile(req, res, file, extraHeaders = {}) {
 const server = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
   const p = decodeURIComponent(url.pathname);
-  if (p.startsWith('/api/artist') || p.startsWith('/api/album')) lastUserRequest = Date.now();
   try {
     if (p === '/api/library') {
       return json(res, {
@@ -502,23 +541,35 @@ const server = http.createServer(async (req, res) => {
         scanning, scanProgress,
         bytes: library.tracks.reduce((s, t) => s + (t.size || 0), 0),
         folder: MUSIC_DIR.replace(os.homedir(), '~'),
+        meta: (() => { const m = missing(); return { pendingArtists: m.artists.length, pendingAlbums: m.albums.length, syncing, online, lastSync }; })(),
       });
     }
+    if (p === '/api/status') {
+      const m = missing();
+      return json(res, { scannedAt: library.scannedAt, scanning, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length, syncing, online, lastSync } });
+    }
     if (p === '/api/rescan' && req.method === 'POST') { scan(); return json(res, { ok: true }); }
+    if (p === '/api/sync' && req.method === 'POST') { syncMetadata(); return json(res, { ok: true }); }
     let m;
     if ((m = p.match(/^\/api\/artist\/([\w]+)$/))) {
       const ar = library.artists.find((a) => a.id === m[1]);
-      return ar ? json(res, await artistInfo(ar)) : json(res, {}, 404);
+      if (!ar) return json(res, {}, 404);
+      const info = await readMeta('artist-' + ar.id);
+      if (!info) syncMetadata();
+      return json(res, info || { pending: true });
     }
     if ((m = p.match(/^\/api\/artist\/([\w]+)\/(picture|fanart)$/))) {
       const ar = library.artists.find((a) => a.id === m[1]);
-      const file = ar && await artistImage(ar, m[2] === 'picture' ? 'thumb' : 'fanart');
-      if (!file) { res.writeHead(404, { 'Cache-Control': 'max-age=3600' }); return res.end(); }
+      const file = ar && path.join(ARTIST_IMG, `${ar.id}-${m[2] === 'picture' ? 'thumb' : 'fanart'}.jpg`);
+      if (!file || !fs.existsSync(file)) { res.writeHead(404, { 'Cache-Control': 'no-store' }); return res.end(); }
       return sendFile(req, res, file, { 'Cache-Control': 'public, max-age=86400' });
     }
     if ((m = p.match(/^\/api\/album\/([\w]+)$/))) {
       const al = library.albums.find((a) => a.id === m[1]);
-      return al ? json(res, await albumInfo(al)) : json(res, {}, 404);
+      if (!al) return json(res, {}, 404);
+      const info = await readMeta('album-' + al.id);
+      if (!info) syncMetadata();
+      return json(res, info || { pending: true });
     }
     if ((m = p.match(/^\/cover\/([\w]+)\.jpg$/))) {
       return sendFile(req, res, path.join(COVERS, m[1] + '.jpg'), { 'Cache-Control': 'public, max-age=86400' });
@@ -537,7 +588,18 @@ const server = http.createServer(async (req, res) => {
 });
 
 try { library = JSON.parse(fs.readFileSync(LIB_FILE, 'utf8')); } catch {}
-server.listen(PORT, '127.0.0.1', () => {
-  console.log(`Discothèque : http://localhost:${PORT}  (musique : ${MUSIC_DIR})`);
-  scan();
-});
+
+if (process.argv.includes('--sync')) {
+  // npm run sync : indexe la musique, rapatrie toutes les métadonnées manquantes, puis s'arrête
+  await scan();
+  await syncMetadata();
+  const left = missing();
+  console.log(left.artists.length + left.albums.length ? `Il reste ${left.artists.length} artiste(s) et ${left.albums.length} album(s) sans métadonnées (connexion ?).` : 'Tout est disponible hors ligne.');
+  process.exit(0);
+} else {
+  server.listen(PORT, '127.0.0.1', () => {
+    console.log(`Discothèque : http://localhost:${PORT}  (musique : ${MUSIC_DIR})`);
+    scan();
+    watchMusic();
+  });
+}
