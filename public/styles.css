@@ -487,10 +487,9 @@ body.flow-mode .lib-card { background: rgba(255, 255, 255, .04); }
 
 /* ---------- Lecteur en verre liquide ---------- */
 .player > * { position: relative; z-index: 1; }
-/* reflets : liseré lumineux, éclat qui suit la souris */
+/* reflets : liseré lumineux et léger dégradé (pas de halo sous le curseur) */
 .player::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
   background:
-    radial-gradient(420px 140px at var(--mx, 30%) var(--my, -30%), rgba(255, 255, 255, .16), transparent 65%),
     linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .02) 38%, transparent 60%, rgba(255, 255, 255, .03));
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), inset 0 -1px 0 rgba(255, 255, 255, .1), inset 1px 0 0 rgba(255, 255, 255, .14), inset -1px 0 0 rgba(255, 255, 255, .14), inset 0 0 18px rgba(255, 255, 255, .04); }
 /* irisation très discrète sur le contour (diffraction) */
@@ -501,3 +500,97 @@ body.flow-mode .lib-card { background: rgba(255, 255, 255, .04); }
 body.liquid .player { background: rgba(14, 14, 16, .36); border-color: transparent;
   backdrop-filter: var(--glass-filter) saturate(175%) brightness(1.08); -webkit-backdrop-filter: var(--glass-filter) saturate(175%) brightness(1.08); }
 body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p-progress { text-shadow: 0 1px 6px rgba(0, 0, 0, .55); }
+
+/* ---------- Ouverture d'un album : boîtier, couvercle, CD ---------- */
+.lid { position: absolute; left: 0; top: 0; width: var(--W); height: var(--S); transform-style: preserve-3d; transform-origin: 0 50%;
+  transform: translateZ(calc(var(--D) / 2)); transition: transform .62s cubic-bezier(.5, 0, .2, 1); }
+.lid .f.front { transform: none; }
+.f.lid-in { left: 0; top: 0; width: var(--W); height: var(--S); transform: rotateY(180deg); border-radius: 2px;
+  /* plastique fumé translucide, comme l'intérieur d'un vrai boîtier */
+  background: linear-gradient(115deg, rgba(255, 255, 255, .3), rgba(255, 255, 255, .04) 38%, rgba(255, 255, 255, 0) 70%, rgba(255, 255, 255, .1)), rgba(28, 28, 34, .5);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, .28), inset 0 1px 0 rgba(255, 255, 255, .5); }
+.cf-item.lid-open .lid { transform: translateZ(calc(var(--D) / 2)) rotateY(-118deg); }
+.f.tray { left: 0; top: 0; width: var(--W); height: var(--S); transform: translateZ(calc(var(--D) / 2 - 2px)); border-radius: 2px;
+  background: radial-gradient(circle at calc(100% - var(--S) / 2) 50%, #2a2a2e 0 12%, #121214 12.5% 47%, #0b0b0c 48%), #0b0b0c; }
+.disc-wrap { position: absolute; width: calc(var(--S) * .92); height: calc(var(--S) * .92); top: calc(var(--S) * .04); left: calc(var(--W) - var(--S) * .96);
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, .55)); transition: transform .9s cubic-bezier(.3, .1, .2, 1); }
+.cf-item.disc-out .disc-wrap { transform: translateX(calc(var(--S) * .5)) rotate(420deg); }
+.cf-item.focus .cf-box { transform: translateZ(calc(var(--S) * .2)); transition: transform .6s var(--ease); }
+.cf-item.focus .f.refl { opacity: .14; transition: opacity .6s; }
+.flow.opening .cf-item:not(.focus) { opacity: 0; transition: opacity .5s ease; }
+.flow.opening .flow-caption, .flow.opening .flow-scrub { opacity: 0; transform: translateY(14px); transition: opacity .4s, transform .5s var(--ease); }
+.flow.opening .flow-stage { -webkit-mask-image: none; mask-image: none; pointer-events: none; }
+
+/* CD : impression de la pochette, moyeu transparent, reflets irisés (diffraction des sillons) */
+.disc { position: absolute; inset: 0; border-radius: 50%;
+  background:
+    radial-gradient(circle, transparent 0 7.2%, rgba(255, 255, 255, .7) 7.6% 8.4%, rgba(205, 210, 216, .55) 8.8% 19%, rgba(255, 255, 255, .45) 19.4% 20.2%, transparent 20.8%),
+    radial-gradient(circle, transparent 0 96.5%, rgba(255, 255, 255, .55) 97% 100%),
+    var(--art) center / cover;
+  -webkit-mask: radial-gradient(circle, transparent 0 6.8%, #000 7.2%); mask: radial-gradient(circle, transparent 0 6.8%, #000 7.2%); }
+.disc::after { content: ""; position: absolute; inset: 0; border-radius: 50%; mix-blend-mode: screen;
+  background: conic-gradient(from 20deg, transparent 0deg, rgba(255, 70, 160, .32) 28deg, rgba(70, 200, 255, .32) 56deg, rgba(255, 235, 110, .28) 86deg, transparent 125deg,
+    transparent 200deg, rgba(110, 255, 200, .28) 232deg, rgba(185, 110, 255, .32) 262deg, rgba(255, 120, 120, .2) 290deg, transparent 320deg); }
+
+/* Page album : le CD dépasse de la pochette, et tourne pendant la lecture */
+.hero-cover { position: relative; margin-right: 96px; }
+.hero-disc { position: absolute; z-index: 0; width: 250px; height: 250px; top: 10px; left: 0; transform: translateX(112px);
+  filter: drop-shadow(0 16px 26px rgba(0, 0, 0, .55)); transition: transform .9s var(--ease); }
+.hero-cover .tilt { position: relative; z-index: 1; }
+.hero-disc.playing { transform: translateX(126px); }
+.hero-disc.playing .disc { animation: spin 4.5s linear infinite; }
+.paused .hero-disc .disc { animation-play-state: paused; }
+@media (max-width: 820px) { .hero-cover { margin-right: 0; } .hero-disc { display: none; } }
+
+/* Arrivée sur la page album : le contenu se dévoile en cascade */
+.arrive .hero-info > *, .arrive .tracklist .tr { animation: rise .7s var(--ease) both; animation-delay: calc(260ms + var(--k, 0) * 45ms); }
+@keyframes rise { from { opacity: 0; transform: translateY(14px); } }
+
+/* Transitions entre pages (View Transitions) : pochette et CD glissent vers leur nouvelle place */
+::view-transition-group(album-cover), ::view-transition-group(album-disc) { animation-duration: .8s; animation-timing-function: cubic-bezier(.22, .8, .2, 1); }
+::view-transition-group(album-disc) { animation-duration: .9s; }
+::view-transition-old(root) { animation: vt-fade-out .45s ease both; }
+::view-transition-new(root) { animation: vt-fade-in .55s .12s ease both; }
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-in { from { opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { ::view-transition-group(*), ::view-transition-old(*), ::view-transition-new(*) { animation: none !important; } }
+
+/* ---------- Premier lancement : choix du dossier ---------- */
+.setup { position: fixed; inset: 0; z-index: 60; display: grid; place-items: center; padding: 24px;
+  background: radial-gradient(1200px 700px at 30% 20%, rgba(250, 45, 72, .22), transparent 60%), radial-gradient(900px 700px at 80% 90%, rgba(90, 110, 255, .18), transparent 60%), #050506;
+  opacity: 0; visibility: hidden; transition: opacity .5s, visibility 0s .5s; }
+.setup.open { opacity: 1; visibility: visible; transition: opacity .5s; }
+.setup-panel { width: min(620px, 100%); text-align: center; animation: rise .8s var(--ease) both; }
+.setup-logo { width: 84px; height: 84px; margin: 0 auto 22px; border-radius: 22px; display: grid; place-items: center; color: #fff;
+  background: linear-gradient(160deg, #ff5a6e, #fa2d48 55%, #c8173a); box-shadow: 0 20px 50px -14px rgba(250, 45, 72, .7), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.setup-logo svg { width: 56px; height: 56px; animation: spin 9s linear infinite; }
+.setup h1 { font-size: 34px; letter-spacing: -.025em; }
+.setup-lead { color: var(--text-2); font-size: 16px; line-height: 1.55; margin: 12px auto 28px; max-width: 520px; }
+.setup-step.hidden { display: none; }
+.setup-pick { height: 46px; padding: 0 26px; font-size: 15.5px; border-radius: 12px; }
+.setup-pick svg { width: 18px; height: 18px; }
+.setup-pick.waiting { opacity: .6; }
+.setup-or { display: flex; align-items: center; gap: 12px; margin: 22px 0 12px; color: var(--text-3); font-size: 12.5px; }
+.setup-or::before, .setup-or::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.setup-path { display: flex; gap: 8px; }
+.setup-path input { flex: 1; min-width: 0; height: 40px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, .1); background: rgba(255, 255, 255, .05);
+  color: var(--text); padding: 0 14px; font: 14px ui-monospace, "SF Mono", Menlo, monospace; outline: none; user-select: text; }
+.setup-path input:focus { border-color: var(--accent); background: rgba(255, 255, 255, .07); }
+.setup-path .btn { height: 40px; }
+.setup-error { min-height: 20px; margin-top: 8px; color: #ff6b81; font-size: 13.5px; }
+.setup-sugg { margin-top: 18px; text-align: left; }
+.setup-sugg-title { font-size: 12px; font-weight: 600; color: var(--text-3); text-transform: uppercase; letter-spacing: .05em; margin: 0 4px 8px; }
+.setup-list { display: grid; gap: 6px; }
+.setup-cand { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: rgba(255, 255, 255, .04); border: 1px solid rgba(255, 255, 255, .06); text-align: left; transition: background .2s, transform .25s var(--ease); }
+.setup-cand:hover, .keys .setup-cand:focus-visible { background: rgba(255, 255, 255, .09); transform: scale(1.01); box-shadow: 0 0 0 2px rgba(255, 255, 255, .5); }
+.setup-cand .ic { width: 30px; height: 30px; border-radius: 8px; display: grid; place-items: center; background: linear-gradient(160deg, #4dabff, #0060df); color: #fff; flex: none; }
+.setup-cand .ic svg { width: 17px; height: 17px; }
+.setup-cand .name { flex: 1; font: 14px ui-monospace, "SF Mono", Menlo, monospace; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.setup-cand .count { color: var(--text-2); font-size: 13px; white-space: nowrap; }
+.setup-searching { color: var(--text-3); font-size: 13.5px; padding: 10px 4px; }
+.setup-cancel { margin-top: 20px; font-size: 13.5px; }
+.setup-bar { height: 6px; border-radius: 6px; background: rgba(255, 255, 255, .08); overflow: hidden; margin: 10px auto 0; max-width: 440px; }
+.setup-bar i { display: block; height: 100%; width: 3%; border-radius: inherit; background: linear-gradient(90deg, #ff6b81, #fa2d48); transition: width .5s var(--ease); box-shadow: 0 0 14px rgba(250, 45, 72, .6); }
+.setup-status { color: var(--text-2); font-size: 14px; margin-top: 14px; font-variant-numeric: tabular-nums; }
+.folder-btn { color: var(--text-2); font-size: 12px; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 130px; }
+.folder-btn:hover, .keys .folder-btn:focus-visible { color: #fff; text-decoration: underline; }

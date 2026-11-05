@@ -12,7 +12,6 @@ import { parseFile } from 'music-metadata';
 
 const exec = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
-const MUSIC_DIR = process.env.MUSIC_DIR || path.join(os.homedir(), 'Downloads');
 const PORT = Number(process.env.PORT || 4321);
 const CACHE = process.env.DISCO_CACHE || path.join(ROOT, 'cache');
 const COVERS = path.join(CACHE, 'covers');
@@ -21,9 +20,17 @@ const ARTIST_IMG = path.join(CACHE, 'artists');
 const LIB_FILE = path.join(CACHE, 'library.json');
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
 const UA = 'Discotheque/1.0 (application musicale locale)';
+const CONFIG_FILE = process.env.DISCO_CONFIG || path.join(ROOT, 'config.json'); // propre à chaque machine, ignoré par Git
+const expandHome = (p) => (p || '').trim().replace(/^~(?=$|\/)/, os.homedir());
+const tilde = (p) => (p ? p.replace(os.homedir(), '~') : null);
+function readConfig() { try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; } }
+function writeConfig(c) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(c, null, 2)); }
+let MUSIC_DIR = process.env.MUSIC_DIR || readConfig().musicDir || null;
 
 if (process.env.DISCO_OFFLINE) globalThis.fetch = async () => { throw new TypeError('hors ligne (simulé)'); };
 for (const d of [CACHE, COVERS, META, ARTIST_IMG]) fs.mkdirSync(d, { recursive: true });
+// Installations antérieures à l'écran d'accueil : la musique était lue dans ~/Downloads
+if (!MUSIC_DIR && fs.existsSync(LIB_FILE)) { MUSIC_DIR = path.join(os.homedir(), 'Downloads'); writeConfig({ musicDir: MUSIC_DIR }); }
 
 const hash = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 12);
 const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
@@ -59,8 +66,10 @@ function fromFolder(file) {
   return { artist: 'Artiste inconnu', album: dir };
 }
 
+let rescanAfter = false;
 async function scan() {
-  if (scanning) return;
+  if (!MUSIC_DIR) return;
+  if (scanning) { rescanAfter = true; return; }
   scanning = true;
   const t0 = Date.now();
   const previous = new Map(library.tracks.map((t) => [t.path, t]));
@@ -167,6 +176,7 @@ async function scan() {
   await fsp.writeFile(LIB_FILE, JSON.stringify(library));
   scanning = false;
   hitIndex = null;
+  if (rescanAfter) { rescanAfter = false; setTimeout(scan, 100); }
   setTimeout(syncMetadata, 1000);
   console.log(`Indexation : ${tracks.length} titres, ${albums.size} albums, ${artists.size} artistes en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
@@ -524,9 +534,12 @@ setInterval(syncMetadata, 15 * 60 * 1000).unref();
 // ---------- Surveillance du dossier de musique ----------
 let rescanTimer = null;
 function scheduleRescan(delay = 20000) { clearTimeout(rescanTimer); rescanTimer = setTimeout(() => scan(), delay); }
+let watcher = null;
 function watchMusic() {
+  watcher?.close(); watcher = null;
+  if (!MUSIC_DIR) return;
   try {
-    fs.watch(MUSIC_DIR, { recursive: true }, (_ev, file) => {
+    watcher = fs.watch(MUSIC_DIR, { recursive: true }, (_ev, file) => {
       if (!file) return;
       const ext = path.extname(file).toLowerCase();
       // nouveaux fichiers audio, images de pochette ou dossiers : on réindexe une fois la copie terminée
@@ -534,6 +547,57 @@ function watchMusic() {
     });
     console.log('Surveillance de', MUSIC_DIR);
   } catch (e) { console.warn('Surveillance impossible :', e.message); }
+}
+
+// ---------- Premier lancement : choix du dossier de musique ----------
+// Compte rapidement les fichiers audio d'un dossier (profondeur et nombre d'entrées limités)
+async function countAudio(dir, { maxDepth = 6, maxEntries = 40000 } = {}) {
+  let audio = 0, seen = 0;
+  async function visit(d, depth) {
+    if (depth > maxDepth || seen > maxEntries) return;
+    let entries; try { entries = await fsp.readdir(d, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (++seen > maxEntries) return;
+      if (e.name.startsWith('.') || e.name === 'node_modules' || e.name.endsWith('.app') || e.name === 'Library') continue;
+      if (e.isDirectory()) await visit(path.join(d, e.name), depth + 1);
+      else if (AUDIO_EXT.has(path.extname(e.name).toLowerCase())) audio++;
+    }
+  }
+  await visit(dir, 0);
+  return { audio, partial: seen > maxEntries };
+}
+async function candidates() {
+  const home = os.homedir();
+  const dirs = ['Music', 'Musique', 'Downloads', 'Desktop', 'Documents'].map((d) => path.join(home, d));
+  try { for (const v of await fsp.readdir('/Volumes')) if (v !== 'Macintosh HD') dirs.push(path.join('/Volumes', v)); } catch {}
+  const out = [];
+  for (const d of dirs) {
+    if (!fs.existsSync(d)) continue;
+    const { audio, partial } = await countAudio(d, { maxDepth: 5, maxEntries: 15000 });
+    if (audio) out.push({ path: d, label: tilde(d), audio, partial, volume: d.startsWith('/Volumes/') });
+  }
+  return out.sort((a, b) => b.audio - a.audio);
+}
+async function setMusicDir(dir) {
+  const full = path.resolve(expandHome(dir));
+  let st; try { st = await fsp.stat(full); } catch { return { error: 'Ce dossier est introuvable.' }; }
+  if (!st.isDirectory()) return { error: 'Ce chemin n’est pas un dossier.' };
+  try { await fsp.access(full, fs.constants.R_OK); } catch { return { error: 'Ce dossier n’est pas lisible (autorisations macOS ?).' }; }
+  const { audio } = await countAudio(full, { maxDepth: 12, maxEntries: 400000 });
+  if (!audio) return { error: 'Aucun fichier audio (FLAC, MP3, M4A…) trouvé dans ce dossier.' };
+  MUSIC_DIR = full;
+  writeConfig({ ...readConfig(), musicDir: full });
+  console.log('Dossier de musique :', full);
+  watchMusic();
+  scan();
+  return { ok: true, path: full, label: tilde(full), audio };
+}
+// Ouvre le sélecteur de dossiers du Finder (le serveur tourne sur le même Mac)
+async function pickFolder() {
+  try {
+    const { stdout } = await exec('osascript', ['-e', 'POSIX path of (choose folder with prompt "Choisissez le dossier qui contient votre musique")'], { timeout: 300000 });
+    return { path: stdout.trim().replace(/\/$/, '') };
+  } catch { return { cancelled: true }; }
 }
 
 // ---------- Commande vocale (whisper.cpp, entièrement local) ----------
@@ -594,15 +658,23 @@ const server = http.createServer(async (req, res) => {
         scannedAt: library.scannedAt,
         scanning, scanProgress,
         bytes: library.tracks.reduce((s, t) => s + (t.size || 0), 0),
-        folder: MUSIC_DIR.replace(os.homedir(), '~'),
+        folder: tilde(MUSIC_DIR),
+        needsSetup: !MUSIC_DIR,
         meta: (() => { const m = missing(); return { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync }; })(),
       });
     }
     if (p === '/api/status') {
       const m = missing();
-      return json(res, { scannedAt: library.scannedAt, scanning, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync } });
+      return json(res, { scannedAt: library.scannedAt, scanning, scanProgress, needsSetup: !MUSIC_DIR, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync } });
     }
     if (p === '/api/rescan' && req.method === 'POST') { scan(); return json(res, { ok: true }); }
+    if (p === '/api/setup' && req.method === 'GET') return json(res, { musicDir: MUSIC_DIR, label: tilde(MUSIC_DIR), fromEnv: !!process.env.MUSIC_DIR, candidates: await candidates() });
+    if (p === '/api/setup' && req.method === 'POST') {
+      const body = JSON.parse((await readBody(req, 1e5)).toString() || '{}');
+      const r = await setMusicDir(body.musicDir);
+      return json(res, r, r.error ? 400 : 200);
+    }
+    if (p === '/api/setup/pick' && req.method === 'POST') return json(res, await pickFolder());
     if (p === '/api/voice/status') return json(res, { available: voiceReady() });
     if (p === '/api/voice' && req.method === 'POST') {
       if (!voiceReady()) return json(res, { error: 'not-installed' }, 501);
@@ -652,6 +724,7 @@ const server = http.createServer(async (req, res) => {
 try { library = JSON.parse(fs.readFileSync(LIB_FILE, 'utf8')); } catch {}
 
 if (process.argv.includes('--sync')) {
+  if (!MUSIC_DIR) { console.log('Aucun dossier de musique configuré : lancez l’app une première fois (npm start).'); process.exit(1); }
   // npm run sync : indexe la musique, rapatrie toutes les métadonnées manquantes, puis s'arrête
   await scan();
   await syncMetadata();
@@ -660,7 +733,7 @@ if (process.argv.includes('--sync')) {
   process.exit(0);
 } else {
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`Discothèque : http://localhost:${PORT}  (musique : ${MUSIC_DIR})`);
+    console.log(`Discothèque : http://localhost:${PORT}  (musique : ${MUSIC_DIR || 'à choisir au premier lancement'})`);
     scan();
     watchMusic();
   });

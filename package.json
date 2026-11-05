@@ -7,7 +7,9 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
     "sync": "node server.js --sync",
-    "install-voice": "zsh scripts/install-voice.sh"
+    "install-voice": "zsh scripts/install-voice.sh",
+    "app": "zsh scripts/launch.sh",
+    "make-app": "zsh scripts/make-app.sh"
   },
   "keywords": [],
   "author": "",

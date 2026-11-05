@@ -45,7 +45,7 @@ async function loadLibrary() {
   const lossless = r.tracks.length && r.tracks.every((t) => t.lossless) ? 'FLAC sans perte' : 'Mixte';
   const when = r.scanning ? `Indexation ${r.scanProgress.done}/${r.scanProgress.total}` : r.scannedAt ? new Date(r.scannedAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
   $('#lib-meta').innerHTML = `<div><span>Taille</span><span>${(r.bytes / 1e9).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go</span></div>
-    <div><span>Qualité</span><span>${lossless}</span></div><div><span>Dossier</span><span>${esc(r.folder || '')}</span></div><div><span>Mise à jour</span><span>${when}</span></div>
+    <div><span>Qualité</span><span>${lossless}</span></div><div><span>Dossier</span><button class="folder-btn" data-change-folder title="Changer de dossier">${esc(r.folder || '—')}</button></div><div><span>Mise à jour</span><span>${when}</span></div>
     <div><span>Infos</span><span>${metaState(r.meta)}</span></div>`;
   return r;
 }
@@ -118,6 +118,7 @@ function getInfo(kind, id) {
 const view = $('#view');
 let cleanup = null;
 let currentHash = location.hash;
+let arriving = null; // album ouvert depuis le Cover Flow (transition animée)
 function route() {
   const h = location.hash.replace(/^#\/?/, '') || store.get('lastView', 'flow');
   const [name, arg] = h.split('/');
@@ -165,7 +166,7 @@ function viewFlow(startId) {
     el.className = 'cf-item'; el.dataset.i = i;
     el.innerHTML = `<div class="cf-box">
         <div class="cf-shadow"></div>
-        <div class="f front"><div class="hinge"></div><img draggable="false" src="${cover(a.id)}" loading="lazy" alt=""><div class="gloss"></div><div class="cf-shade"></div></div>
+        <div class="lid"><div class="f front"><div class="hinge"></div><img draggable="false" src="${cover(a.id)}" loading="lazy" alt=""><div class="gloss"></div><div class="cf-shade"></div></div><div class="f lid-in"></div></div>
         <div class="f back"></div>
         <div class="f left"><span>${esc(a.artist)} · ${esc(a.title)}</span></div>
         <div class="f right"></div><div class="f top"></div><div class="f bottom"></div>
@@ -208,7 +209,37 @@ function viewFlow(startId) {
   }
   const kick = () => { if (!raf) raf = requestAnimationFrame(animate); };
   const go = (t) => { target = Math.max(0, Math.min(albums.length - 1, t)); kick(); };
-  const openAlbum = (i) => { location.hash = `#/album/${albums[i].id}`; };
+  let opening = false;
+  const wait = (ms) => new Promise((r) => setTimeout(r, ms));
+  // Ouverture d'un album : le boîtier avance, le couvercle pivote sur sa charnière, le CD sort en tournant,
+  // le couvercle se referme, puis pochette et CD glissent vers leur place sur la page de l'album.
+  async function openAlbum(i) {
+    const a = albums[i];
+    if (opening) return;
+    if (!document.startViewTransition || matchMedia('(prefers-reduced-motion: reduce)').matches) { location.hash = `#/album/${a.id}`; return; }
+    opening = true;
+    if (Math.round(pos) !== i || pos !== target) { go(i); while (pos !== target) await wait(30); }
+    const el = items[i], flow = $('.flow');
+    const box = el.querySelector('.cf-box');
+    if (!el.querySelector('.tray')) box.insertAdjacentHTML('afterbegin', `<div class="f tray"><div class="disc-wrap"><div class="disc" style="--art:url('${cover(a.id)}')"></div></div></div>`);
+    flow.classList.add('opening'); el.classList.add('focus');
+    await wait(420);
+    el.classList.add('lid-open');
+    await wait(380);
+    el.classList.add('disc-out');
+    await wait(720);
+    el.classList.remove('lid-open');
+    await wait(520);
+    el.querySelector('.f.front').style.viewTransitionName = 'album-cover';
+    el.querySelector('.disc').style.viewTransitionName = 'album-disc';
+    arriving = a.id;
+    const vt = document.startViewTransition(() => {
+      nav.remember(currentHash);
+      history.pushState(null, '', `#/album/${a.id}`);
+      route();
+    });
+    vt.finished.finally(() => { arriving = null; $$('[style*="view-transition-name"]').forEach((n) => (n.style.viewTransitionName = '')); });
+  }
   let capTimer;
   function updateCaption() {
     const a = albums[cur];
@@ -253,7 +284,7 @@ function viewFlow(startId) {
   cap.addEventListener('click', (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act; const a = albums[cur];
     if (act === 'play') player.playList(a.tracks, 0);
-    if (act === 'open') location.hash = `#/album/${a.id}`;
+    if (act === 'open') openAlbum(cur);
   });
   const onKey = (e) => {
     if (document.activeElement !== stage && document.activeElement !== document.body) return;
@@ -312,7 +343,7 @@ function viewAlbum(id) {
   const others = ar ? ar.albums.filter((x) => x !== id).map((x) => A.get(x)) : [];
   view.innerHTML = `
     <div class="album-hero">
-      <div class="hero-cover tilt-host"><div class="tilt"><img data-fade src="${cover(a.id)}" alt=""><div class="glare"></div></div></div>
+      <div class="hero-cover tilt-host"><div class="hero-disc ${player.current && T.get(player.current)?.albumId === a.id ? 'playing' : ''}" data-album="${a.id}" data-disc><div class="disc" style="--art:url('${cover(a.id)}')"></div></div><div class="tilt"><img data-fade src="${cover(a.id)}" alt=""><div class="glare"></div></div></div>
       <div class="hero-info">
         <div class="eyebrow">Album</div>
         <h1>${esc(a.title)}</h1>
@@ -327,6 +358,13 @@ function viewAlbum(id) {
     </div>
     ${others.length ? `<div class="page" style="padding-top:0"><h2>Autres albums de ${esc(a.artist)}</h2><div class="shelf">${others.map(albumCard).join('')}</div></div>` : ''}`;
   onImgLoad(view);
+  if (arriving === a.id) {
+    $('.hero-cover .tilt').style.viewTransitionName = 'album-cover';
+    $('.hero-disc .disc').style.viewTransitionName = 'album-disc';
+    view.classList.add('arrive');
+    $$('.hero-info > *, .tracklist .tr', view).slice(0, 18).forEach((n, k) => n.style.setProperty('--k', k));
+    setTimeout(() => view.classList.remove('arrive'), 2000);
+  }
   dominant(a.id).then((c) => view.style.setProperty('--tint', c.join(',')));
   setAmbient(a.id);
   $('.hero-actions').addEventListener('click', (e) => {
@@ -528,7 +566,7 @@ function viewSearch(q) {
     ${top ? `<h2>Meilleur résultat</h2>${top}` : ''}
     ${r.artists.length ? `<h2>Artistes</h2><div class="artist-grid">${r.artists.slice(0, 24).map(artistCard).join('')}</div>` : ''}
     ${r.albums.length ? `<h2>Albums <span class="muted" style="font-size:14px;font-weight:400">${r.albums.length}</span></h2><div class="grid">${r.albums.map(albumCard).join('')}</div>` : ''}
-    ${r.tracks.length ? `<h2>Titres <span class="muted" style="font-size:14px;font-weight:400">${r.tracks.length} · double-clic ou OK pour lire</span></h2><div id="songs-box"></div>` : ''}
+    ${r.tracks.length ? `<h2>Titres <span class="muted" style="font-size:14px;font-weight:400">${r.tracks.length}</span></h2><div id="songs-box"></div>` : ''}
     ${nothing ? `<p class="muted">Essayez un autre mot, ou parcourez :</p>${browseHTML()}` : ''}</div>`;
   if (nothing) tintTiles();
   if (r.tracks.length) viewTracks(null, r.tracks.slice(0, 300))();
@@ -608,12 +646,29 @@ $('#mic').addEventListener('click', (e) => { e.preventDefault(); startVoice(); }
 $('#voice-cancel').onclick = stopVoice;
 view.addEventListener('click', (e) => { if (e.target.closest('[data-voice]')) startVoice(); });
 
+// Depuis une grille : la pochette cliquée se transforme en grande pochette de la page album
+function openFromCard(card) {
+  const id = card.dataset.album;
+  const img = card.querySelector('.tilt') || card.querySelector('img');
+  if (!document.startViewTransition || !img || matchMedia('(prefers-reduced-motion: reduce)').matches) { location.hash = `#/album/${id}`; return; }
+  img.style.viewTransitionName = 'album-cover';
+  arriving = null;
+  const vt = document.startViewTransition(() => {
+    img.style.viewTransitionName = '';
+    nav.remember(currentHash);
+    history.pushState(null, '', `#/album/${id}`);
+    route();
+    const hero = $('.hero-cover .tilt'); if (hero) hero.style.viewTransitionName = 'album-cover';
+  });
+  vt.finished.finally(() => { const hero = $('.hero-cover .tilt'); if (hero) hero.style.viewTransitionName = ''; });
+}
+
 // ---------- Clics globaux dans les vues ----------
 view.addEventListener('click', (e) => {
   const chip = e.target.closest('[data-chip]'); if (chip) { setSearch(chip.dataset.chip); return; }
   const playBtn = e.target.closest('[data-play-album]');
   if (playBtn) { e.stopPropagation(); player.playList(A.get(playBtn.dataset.playAlbum).tracks, 0); return; }
-  const card = e.target.closest('[data-album]'); if (card) { location.hash = `#/album/${card.dataset.album}`; return; }
+  const card = e.target.closest('[data-album]:not([data-disc])'); if (card) { openFromCard(card); return; }
   const art = e.target.closest('[data-artist]'); if (art) { location.hash = `#/artist/${art.dataset.artist}`; return; }
   const tr = e.target.closest('.tracklist .tr');
   if (tr) { const ids = $$('.tr', tr.closest('tbody')).map((x) => x.dataset.track); player.playList(ids, ids.indexOf(tr.dataset.track)); }
@@ -725,6 +780,7 @@ function updateNowPlaying(t) {
   $('#np-format').textContent = fmt;
   document.title = `${t.title} — ${t.artist}`;
   $$('[data-track]').forEach((el) => el.classList.toggle('playing', el.dataset.track === t.id));
+  $$('.hero-disc').forEach((d) => d.classList.toggle('playing', d.dataset.album === t.albumId));
   if ('mediaSession' in navigator) {
     navigator.mediaSession.metadata = new MediaMetadata({ title: t.title, artist: t.artist, album: a?.title || t.album, artwork: [{ src: location.origin + cover(t.albumId), sizes: '1000x1000', type: 'image/jpeg' }] });
   }
@@ -841,9 +897,90 @@ setInterval(async () => {
 
 liquidGlass($('#player'));
 
+// ---------- Premier lancement : choix du dossier de musique ----------
+const LOGO = '<svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg>';
+const FOLDER = '<svg viewBox="0 0 24 24"><path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.4l2 2h8.6A1.5 1.5 0 0 1 21 8.5v9a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 17.5z" fill="currentColor"/></svg>';
+const DISK = '<svg viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="10" rx="2.5" fill="currentColor"/><circle cx="17" cy="12" r="1.2" fill="#000" opacity=".5"/></svg>';
+function showSetup({ change = false } = {}) {
+  return new Promise((done) => {
+    const box = $('#setup');
+    const close = () => { box.classList.remove('open'); box.setAttribute('aria-hidden', 'true'); setTimeout(() => { box.innerHTML = ''; }, 500); done(); };
+    box.innerHTML = `<div class="setup-panel">
+      <div class="setup-logo">${LOGO}</div>
+      <h1>${change ? 'Dossier de musique' : 'Bienvenue dans Discothèque'}</h1>
+      <p class="setup-lead">${change ? 'Choisissez un autre dossier à lire.' : 'Pour commencer, indiquez le dossier qui contient votre musique (FLAC, MP3, M4A…).'}
+        Vos fichiers ne seront ni modifiés ni déplacés&nbsp;: Discothèque se contente de les lire.</p>
+      <div class="setup-step" id="setup-choose">
+        <button class="btn primary setup-pick" id="setup-pick">${FOLDER} Choisir un dossier…</button>
+        <div class="setup-or"><span>ou saisissez son chemin</span></div>
+        <form class="setup-path" id="setup-form"><input id="setup-input" spellcheck="false" autocomplete="off" placeholder="~/Musique"><button class="btn soft" type="submit">Valider</button></form>
+        <div class="setup-error" id="setup-error"></div>
+        <div class="setup-sugg"><div class="setup-sugg-title">Dossiers contenant de la musique sur ce Mac</div><div id="setup-list" class="setup-list"><div class="setup-searching">Recherche…</div></div></div>
+        ${change ? '<button class="link-btn setup-cancel" id="setup-cancel">Annuler</button>' : ''}
+      </div>
+      <div class="setup-step hidden" id="setup-progress">
+        <div class="setup-bar"><i id="setup-bar"></i></div>
+        <p class="setup-status" id="setup-status">Lecture des fichiers…</p>
+      </div>
+    </div>`;
+    box.classList.add('open'); box.setAttribute('aria-hidden', 'false');
+    const err = (m) => { $('#setup-error').textContent = m || ''; };
+    const busy = (on) => $$('#setup-choose button, #setup-input').forEach((b) => (b.disabled = on));
+    async function choose(dir) {
+      if (!dir) return;
+      err(''); busy(true);
+      $('#setup-input').value = dir;
+      const r = await fetch('/api/setup', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ musicDir: dir }) }).then((x) => x.json()).catch(() => ({ error: 'Serveur injoignable.' }));
+      busy(false);
+      if (r.error) return err(r.error);
+      // Indexation : barre de progression jusqu'à ce que la bibliothèque soit prête
+      $('#setup-choose').classList.add('hidden'); $('#setup-progress').classList.remove('hidden');
+      $('.setup-lead').textContent = `${r.audio.toLocaleString('fr-FR')} morceaux trouvés dans ${r.label}.`;
+      await new Promise((s) => setTimeout(s, 400));
+      for (;;) {
+        const st = await fetch('/api/status').then((x) => x.json()).catch(() => null);
+        if (st?.scanning) {
+          const { done: d, total } = st.scanProgress;
+          $('#setup-bar').style.width = `${total ? Math.round((d / total) * 100) : 5}%`;
+          $('#setup-status').textContent = d < total ? `Lecture des fichiers… ${d.toLocaleString('fr-FR')} / ${total.toLocaleString('fr-FR')}` : 'Préparation des pochettes…';
+        } else if (st && !st.needsSetup) {
+          $('#setup-bar').style.width = '100%';
+          $('#setup-status').textContent = `Prêt : ${st.albums.toLocaleString('fr-FR')} albums.`;
+          await new Promise((s) => setTimeout(s, 700));
+          return close();
+        }
+        await new Promise((s) => setTimeout(s, 600));
+      }
+    }
+    $('#setup-pick').onclick = async () => {
+      err(''); $('#setup-pick').classList.add('waiting');
+      const r = await fetch('/api/setup/pick', { method: 'POST' }).then((x) => x.json()).catch(() => ({}));
+      $('#setup-pick').classList.remove('waiting');
+      if (r.path) choose(r.path);
+    };
+    $('#setup-form').onsubmit = (e) => { e.preventDefault(); choose($('#setup-input').value.trim()); };
+    $('#setup-cancel')?.addEventListener('click', close);
+    box.onkeydown = (e) => { if (e.key === 'Escape' && change) { e.stopPropagation(); close(); } };
+    fetch('/api/setup').then((x) => x.json()).then((st) => {
+      if (st.label && change) $('#setup-input').value = st.label;
+      $('#setup-list').innerHTML = st.candidates.length
+        ? st.candidates.map((c) => `<button class="setup-cand" data-path="${esc(c.path)}"><span class="ic">${c.volume ? DISK : FOLDER}</span><span class="name">${esc(c.label)}</span><span class="count">${c.partial ? 'plus de ' : ''}${c.audio.toLocaleString('fr-FR')} morceaux</span></button>`).join('')
+        : '<div class="setup-searching">Aucun dossier évident : choisissez-le ou saisissez son chemin.</div>';
+      $$('.setup-cand').forEach((b) => (b.onclick = () => choose(b.dataset.path)));
+      nav.focusEl($('#setup-pick'));
+    });
+  });
+}
+$('#lib-meta').addEventListener('click', async (e) => {
+  if (!e.target.closest('[data-change-folder]')) return;
+  await showSetup({ change: true });
+  await loadLibrary(); route();
+});
+
 // ---------- Démarrage ----------
 (async () => {
   let r = await loadLibrary();
+  if (r.needsSetup) { await showSetup(); r = await loadLibrary(); }
   while (r.scanning && !r.albums.length) { view.innerHTML = `<div class="empty">Indexation de la musique… ${r.scanProgress.done}/${r.scanProgress.total}</div>`; await new Promise((s) => setTimeout(s, 1000)); r = await loadLibrary(); }
   const s = store.get('session');
   if (s?.queue?.every((id) => T.has(id))) { Object.assign(player, { queue: s.queue, order: s.order, pos: s.pos }); player.load(false); }

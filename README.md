@@ -8,14 +8,26 @@ navigation complète au clavier ou à la télécommande. **Fonctionne entièreme
 
 ## Démarrage
 
+Prérequis : macOS et [Node.js](https://nodejs.org) 18 ou plus.
+
 ```sh
+git clone https://github.com/pchartie/discotheque && cd discotheque
 npm install
-npm start                       # http://localhost:4321
-MUSIC_DIR=~/Musique npm start   # pour lire un autre dossier (par défaut : ~/Downloads)
+npm run make-app   # crée ~/Applications/Discothèque.app (à double-cliquer ensuite)
+npm run app        # ou lance directement
 ```
 
+Au premier lancement, un écran d'accueil demande le dossier qui contient la musique (sélecteur du Finder,
+chemin à saisir, ou dossiers détectés automatiquement). Il reste modifiable depuis la colonne de gauche
+(ligne « Dossier »). Le choix est enregistré dans `config.json`, propre à chaque machine.
+
+**Comment ça tourne** : `server.js` est un petit serveur web local (127.0.0.1:4321, invisible depuis le réseau)
+qui indexe la musique et sert l'audio, les pochettes et les fiches ; l'interface est une page web. Le lanceur
+démarre le serveur en arrière-plan s'il ne tourne pas, puis ouvre une fenêtre d'application dédiée
+(Chrome, Brave ou Edge ; sinon le navigateur par défaut). `npm start` lance le serveur au premier plan.
+
 Les fichiers audio ne sont **jamais modifiés ni déplacés** : l'app ne fait que les lire.
-Tout ce qui est dérivé (pochettes redimensionnées, fiches, photos, articles) va dans `cache/`,
+Tout ce qui est dérivé (pochettes redimensionnées, fiches, photos) va dans `cache/`,
 qui peut être supprimé sans risque.
 
 ## Hors ligne
@@ -68,6 +80,8 @@ Sur le curseur de position ou de volume : ← → pour avancer de 10 s / régler
 - `public/search.js` : moteur de recherche (fautes de frappe, sigles, décennies, genres, pays)
 - `public/keynav.js` : navigation spatiale au clavier / à la télécommande
 - `public/voice.js` : capture du micro et détection de fin de phrase
+- `public/glass.js` : effet de verre liquide du lecteur (réfraction, dispersion)
+- `scripts/` : lanceur, création de l'app, installation de la reconnaissance vocale
 
-Variables utiles pour tester : `PORT`, `MUSIC_DIR`, `DISCO_CACHE`, `DISCO_OFFLINE=1` (simule l'absence de réseau).
+Variables utiles pour tester : `PORT`, `MUSIC_DIR` (prioritaire sur `config.json`), `DISCO_CONFIG`, `DISCO_CACHE`, `DISCO_OFFLINE=1` (simule l'absence de réseau).
 La génération des miniatures utilise `sips`, fourni avec macOS.
