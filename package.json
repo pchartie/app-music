@@ -6,7 +6,8 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "start": "node server.js",
-    "sync": "node server.js --sync"
+    "sync": "node server.js --sync",
+    "install-voice": "zsh scripts/install-voice.sh"
   },
   "keywords": [],
   "author": "",

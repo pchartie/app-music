@@ -1,4 +1,7 @@
 // Discothèque — interface
+import { buildIndex, search as runSearch } from './search.js';
+import * as nav from './keynav.js';
+import { listen, voiceAvailable } from './voice.js';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -14,6 +17,8 @@ const ICON = {
 };
 
 let LIB = { albums: [], artists: [], tracks: [] };
+let searchIndex = null;
+const getIndex = () => (searchIndex ||= buildIndex(LIB));
 const T = new Map(), A = new Map(), R = new Map();
 
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600); }
@@ -28,7 +33,7 @@ function metaState(m) {
 async function loadLibrary() {
   const r = await fetch('/api/library').then((x) => x.json());
   LIB = r;
-  T.clear(); A.clear(); R.clear();
+  T.clear(); A.clear(); R.clear(); searchIndex = null;
   r.tracks.forEach((t) => T.set(t.id, t));
   r.albums.forEach((a) => A.set(a.id, a));
   r.artists.forEach((a) => R.set(a.id, a));
@@ -111,6 +116,7 @@ function getInfo(kind, id) {
 // ---------- Routeur ----------
 const view = $('#view');
 let cleanup = null;
+let currentHash = location.hash;
 function route() {
   const h = location.hash.replace(/^#\/?/, '') || store.get('lastView', 'flow');
   const [name, arg] = h.split('/');
@@ -120,8 +126,11 @@ function route() {
   view.scrollTop = 0;
   if (['flow', 'albums', 'artists', 'tracks'].includes(name)) store.set('lastView', name);
   ({ flow: viewFlow, albums: viewAlbums, album: viewAlbum, artists: viewArtists, artist: viewArtist, tracks: viewTracks, search: viewSearch }[name] || viewFlow)(arg && decodeURIComponent(arg));
+  nav.makeFocusable(view);
+  if (name !== 'search' || document.activeElement !== $('#search')) nav.restore(location.hash);
+  currentHash = location.hash;
 }
-window.addEventListener('hashchange', route);
+window.addEventListener('hashchange', () => { nav.remember(currentHash); route(); });
 
 // ---------- Cover Flow (boîtiers de CD en 3D) ----------
 function viewFlow(startId) {
@@ -132,7 +141,7 @@ function viewFlow(startId) {
   view.innerHTML = `
     <div class="flow">
       <div class="flow-bg"><img alt=""><img alt=""></div>
-      <div class="flow-stage" id="stage"></div>
+      <div class="flow-stage" id="stage" tabindex="0" aria-label="Cover Flow : flèches gauche et droite pour parcourir, OK pour ouvrir"></div>
       <div class="flow-caption"><div class="t"></div><div class="a"></div>
         <div class="flow-actions"><button class="btn glass primary" data-act="play">${ICON.play} Lecture</button><button class="btn glass" data-act="open">Ouvrir l'album</button></div>
       </div>
@@ -236,15 +245,20 @@ function viewFlow(startId) {
     if (act === 'open') location.hash = `#/album/${a.id}`;
   });
   const onKey = (e) => {
-    if (e.target.matches('input:not([type=range])')) return;
-    if (e.key === 'ArrowRight') { e.preventDefault(); go(Math.round(target) + 1); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); go(Math.round(target) - 1); }
-    if (e.key === 'Enter') openAlbum(cur);
+    if (document.activeElement !== stage && document.activeElement !== document.body) return;
+    if (nav.topOverlay()) return;
+    if (e.key === 'ArrowRight') { e.preventDefault(); e.stopImmediatePropagation(); go(Math.round(target) + 1); stage.focus({ preventScroll: true }); }
+    if (e.key === 'ArrowLeft') {
+      e.preventDefault(); e.stopImmediatePropagation();
+      if (Math.round(target) === 0) { nav.focusEl($('nav a.active') || $('nav a')); return; } // premier album : on rejoint la colonne
+      go(Math.round(target) - 1); stage.focus({ preventScroll: true });
+    }
+    if (e.key === 'Enter') { e.preventDefault(); e.stopImmediatePropagation(); openAlbum(cur); }
   };
-  window.addEventListener('keydown', onKey);
+  window.addEventListener('keydown', onKey, true);
   const ro = new ResizeObserver(resize); ro.observe(stage);
   resize(); updateCaption();
-  cleanup = () => { window.removeEventListener('keydown', onKey); ro.disconnect(); cancelAnimationFrame(raf); };
+  cleanup = () => { window.removeEventListener('keydown', onKey, true); ro.disconnect(); cancelAnimationFrame(raf); };
 }
 
 // ---------- Albums ----------
@@ -290,7 +304,7 @@ function viewAlbum(id) {
         <h1>${esc(a.title)}</h1>
         <a class="hero-artist" href="#/artist/${a.artistId}">${esc(a.artist)}</a>
         <div class="hero-facts">${[a.genre, a.year, `${a.tracks.length} titres`, fmtLong(a.duration)].filter(Boolean).map(esc).join(' · ')} <span class="badge">${esc(a.format)}</span></div>
-        <div class="hero-actions"><button class="btn primary" data-act="play">${ICON.play} Lecture</button><button class="btn soft" data-act="shuffle">${ICON.shuffle} Aléatoire</button></div>
+        <div class="hero-actions"><button class="btn primary" data-act="play" data-autofocus>${ICON.play} Lecture</button><button class="btn soft" data-act="shuffle">${ICON.shuffle} Aléatoire</button></div>
       </div>
     </div>
     <div class="album-body">
@@ -309,11 +323,35 @@ function viewAlbum(id) {
     const box = $('#about'); if (!box) return;
     const d = info.firstRelease; const date = d && (d.length === 10 ? new Date(d).toLocaleDateString('fr-FR', { year: 'numeric', month: 'long', day: 'numeric' }) : d.slice(0, 4));
     const facts = [['Première sortie', date], ['Label', info.label], ['Genres', info.genres?.join(', ')], ['Format', a.format], ['Durée', fmtLong(a.duration)]].filter((x) => x[1]);
+    readerData = { kind: 'Album', title: a.title, wiki: info.wiki };
     box.innerHTML = `<h3>À propos</h3>
-      ${info.pending ? '<p class="muted">Infos pas encore téléchargées. Elles seront récupérées automatiquement dès que le Mac sera connecté à Internet.</p>' : info.wiki ? `<p>${esc(info.wiki.extract)}</p><a class="ext" href="${esc(info.wiki.url)}" target="_blank" rel="noopener">Lire la suite sur Wikipédia ↗</a>` : '<p>Aucune notice trouvée pour cet album.</p>'}
+      ${info.pending ? '<p class="muted">Infos pas encore téléchargées. Elles seront récupérées automatiquement dès que le Mac sera connecté à Internet.</p>' : info.wiki ? `<p>${esc(info.wiki.extract)}</p>${readMoreBtn(info.wiki)}` : '<p>Aucune notice trouvée pour cet album.</p>'}
       <dl>${facts.map(([k, v]) => `<dt>${k}</dt><dd>${esc(v)}</dd>`).join('')}</dl>`;
   });
 }
+
+// ---------- Lecture d'un article complet, stocké localement ----------
+let readerData = null;
+const SKIP_SECTIONS = /^(notes?( et références)?|références|liens externes|voir aussi|bibliographie|annexes|articles connexes|sources|external links|references|see also|further reading|notes and references|citations)$/i;
+const readMoreBtn = (w) => (w.full && w.full.length > w.extract.length + 200 ? '<button class="read-more" data-read>Lire la suite</button>' : '');
+function openReader() {
+  if (!readerData?.wiki?.full) return;
+  const out = []; let skip = false;
+  for (const line of readerData.wiki.full.split('\n')) {
+    const m = line.match(/^(={2,4})\s*(.+?)\s*\1$/);
+    if (m) { skip = SKIP_SECTIONS.test(m[2]); if (!skip) out.push(m[1].length === 2 ? `<h3>${esc(m[2])}</h3>` : `<h4>${esc(m[2])}</h4>`); continue; }
+    if (!skip && line.trim()) out.push(`<p>${esc(line)}</p>`);
+  }
+  $('#reader-kind').textContent = readerData.kind;
+  $('#reader-title').textContent = readerData.title;
+  $('#reader-body').innerHTML = out.join('');
+  $('#reader-body').scrollTop = 0;
+  $('#reader').classList.add('open'); $('#reader').setAttribute('aria-hidden', 'false');
+  $('#reader-body').focus({ preventScroll: true });
+}
+function closeReader() { $('#reader').classList.remove('open'); $('#reader').setAttribute('aria-hidden', 'true'); nav.focusEl($('[data-read]')); }
+$('#reader-close').onclick = closeReader;
+$('#reader').addEventListener('click', (e) => { if (e.target.id === 'reader') closeReader(); });
 
 // ---------- Artistes ----------
 const PAYS = { 'United States': 'États-Unis', 'United Kingdom': 'Royaume-Uni', England: 'Angleterre', Scotland: 'Écosse', Germany: 'Allemagne', Sweden: 'Suède', Greece: 'Grèce', Australia: 'Australie', Ireland: 'Irlande', Italy: 'Italie', Norway: 'Norvège', Finland: 'Finlande', Netherlands: 'Pays-Bas', Spain: 'Espagne', Belgium: 'Belgique', Switzerland: 'Suisse', Brazil: 'Brésil', Japan: 'Japon', Denmark: 'Danemark', Austria: 'Autriche', Poland: 'Pologne', 'New Zealand': 'Nouvelle-Zélande', Jamaica: 'Jamaïque', Mexico: 'Mexique', Russia: 'Russie' };
@@ -351,7 +389,7 @@ function viewArtist(id) {
   view.innerHTML = `
     <div class="artist-hero"><img class="bgblur" src="${cover(last.id)}" alt=""><img class="bgimg" alt="">
       <div class="inner"><div><div class="eyebrow" style="color:rgba(255,255,255,.7)" id="ar-type">Artiste</div><h1>${esc(ar.name)}</h1></div>
-        <div class="hero-actions" style="margin:0"><button class="btn glass primary" data-act="play">${ICON.play} Lecture</button><button class="btn glass" data-act="shuffle">${ICON.shuffle} Aléatoire</button></div></div></div>
+        <div class="hero-actions" style="margin:0"><button class="btn glass primary" data-act="play" data-autofocus>${ICON.play} Lecture</button><button class="btn glass" data-act="shuffle">${ICON.shuffle} Aléatoire</button></div></div></div>
     <div class="page" style="padding-top:8px">
       <div class="facts" id="facts">
         <div class="fact"><small>Dans la bibliothèque</small><b>${albums.length} album${albums.length > 1 ? 's' : ''} · ${allTracks.length} titres</b></div>
@@ -384,9 +422,10 @@ function viewArtist(id) {
     ].filter((f) => f[1]);
     $('#facts').insertAdjacentHTML('beforeend', facts.map(([k, v]) => `<div class="fact"><small>${k}</small><b>${esc(v)}</b></div>`).join(''));
     const tags = [...new Set([...(ar.genres || []), ...(info.tags || [])].map((t) => t.toLowerCase()))].slice(0, 8);
+    readerData = { kind: 'Biographie', title: ar.name, wiki: info.wiki };
     $('#bio').innerHTML = `<h2>Biographie</h2>
       ${tags.length ? `<div class="chips" style="margin-bottom:14px">${tags.map((t) => `<span class="chip">${esc(t)}</span>`).join('')}</div>` : ''}
-      ${info.pending ? '<p class="muted">Infos pas encore téléchargées. Elles seront récupérées automatiquement dès que le Mac sera connecté à Internet.</p>' : info.wiki ? `<p class="bio">${esc(info.wiki.extract)}</p><a class="ext link-btn" href="${esc(info.wiki.url)}" target="_blank" rel="noopener">Lire la suite sur Wikipédia ↗</a>` : '<p class="bio">Aucune biographie trouvée.</p>'}`;
+      ${info.pending ? '<p class="muted">Infos pas encore téléchargées. Elles seront récupérées automatiquement dès que le Mac sera connecté à Internet.</p>' : info.wiki ? `<p class="bio">${esc(info.wiki.extract)}</p>${readMoreBtn(info.wiki)}` : '<p class="bio">Aucune biographie trouvée.</p>'}`;
   });
 }
 
@@ -420,7 +459,7 @@ function viewTracks(_, filtered) {
     table.addEventListener('click', (e) => {
       const hd = e.target.closest('th'); if (hd) { sort = { k: hd.dataset.k, d: sort.k === hd.dataset.k ? -sort.d : 1 }; store.set('trackSort', sort); render(); return; }
       if (e.target.closest('a')) return;
-      const tr = e.target.closest('tr[data-track]'); if (tr && e.detail === 2) player.playList(ids, +tr.dataset.n);
+      const tr = e.target.closest('tr[data-track]'); if (tr && e.detail !== 1) player.playList(ids, +tr.dataset.n); // double-clic, ou OK au clavier
     });
   };
   if (filtered) return render;
@@ -428,36 +467,118 @@ function viewTracks(_, filtered) {
 }
 
 // ---------- Recherche ----------
-function viewSearch(q) {
-  q = q || ''; const n = norm(q).trim();
-  if ($('#search').value !== q) $('#search').value = q;
-  if (!n) { view.innerHTML = '<div class="page"><h1>Recherche</h1><p class="muted">Tapez un nom d’artiste, d’album ou de titre.</p></div>'; return; }
-  const words = n.split(/\s+/);
-  const match = (...f) => { const s = norm(f.join(' ')); return words.every((w) => s.includes(w)); };
-  const artists = LIB.artists.filter((a) => match(a.name));
-  const albums = LIB.albums.filter((a) => match(a.title, a.artist, a.year));
-  const tracks = LIB.tracks.filter((t) => match(t.title, t.artist, t.album));
-  view.innerHTML = `<div class="page"><h1>Résultats pour « ${esc(q)} »</h1>
-    ${artists.length ? `<h2>Artistes</h2><div class="artist-grid">${artists.map(artistCard).join('')}</div>` : ''}
-    ${albums.length ? `<h2>Albums</h2><div class="grid">${albums.map(albumCard).join('')}</div>` : ''}
-    ${tracks.length ? `<h2>Titres <span class="muted" style="font-size:13px;font-weight:400">— double-clic pour lire</span></h2><div id="songs-box"></div>` : ''}
-    ${!artists.length && !albums.length && !tracks.length ? '<div class="empty">Aucun résultat.</div>' : ''}</div>`;
-  if (tracks.length) viewTracks(null, tracks.slice(0, 300))();
-  onImgLoad(view);
-  cleanup = hydrateAvatars(view);
+function setSearch(q) {
+  $('#search').value = q;
+  history.replaceState(null, '', `#/search/${encodeURIComponent(q)}`);
+  route();
 }
+function browseHTML() {
+  const idx = getIndex();
+  const genres = idx.genres.filter((g) => g.length < 24).slice(0, 18);
+  const decadeColor = (d) => ({ 1960: '255,159,10', 1970: '255,214,10', 1980: '255,55,95', 1990: '191,90,242', 2000: '10,132,255', 2010: '48,209,88', 2020: '100,210,255' }[d] || '142,142,147');
+  return `<div class="browse">
+    <section><h2>Par décennie</h2><div class="chip-row">${idx.decades.map((d) => `<button data-chip="années ${String(d).slice(d < 2000 ? 2 : 0)}" class="decade" style="--c:${decadeColor(d)}">${d < 2000 ? `${String(d).slice(2)}’s` : `${d}s`}</button>`).join('')}</div></section>
+    <section><h2>Par style</h2><div class="chip-row">${genres.map((g) => `<button data-chip="${esc(g)}">${esc(g.replace(/^./, (c) => c.toUpperCase()))}</button>`).join('')}</div></section>
+    <section><h2>Par pays</h2><div class="chip-row">${idx.countries.map((c) => `<button data-chip="${esc(fr(c))}">${esc(fr(c))}</button>`).join('')}</div></section>
+    <section class="examples">Tapez ou dites quelques mots, même approximatifs :
+      ${['metal allemand', 'années 80', 'rhcp', '1986', 'rap', 'groupe suédois', 'joue Renaud'].map((x) => `<kbd data-chip="${x}">${x}</kbd>`).join(' ')}</section>
+  </div>`;
+}
+function viewSearch(q) {
+  q = q || '';
+  if ($('#search').value !== q && document.activeElement !== $('#search')) $('#search').value = q;
+  if (!q.trim()) {
+    view.innerHTML = `<div class="page"><div class="page-head"><h1>Rechercher</h1>
+      <button class="btn soft voice-cta" data-voice data-autofocus>${MIC} Recherche vocale</button></div>${browseHTML()}</div>`;
+    return;
+  }
+  const r = runSearch(getIndex(), q);
+  const facets = [...r.labels.map((l) => `<span class="facet">${esc(l)}</span>`), ...r.ignored.map((w) => `<span class="facet ignored" title="Mot ignoré : aucun résultat">${esc(w)}</span>`)].join('');
+  let top = '';
+  if (r.top) {
+    const it = r.top.item;
+    top = r.top.kind === 'artist'
+      ? `<div class="top-hit artist" data-artist="${it.id}" tabindex="0"><img src="/api/artist/${it.id}/picture" onerror="this.src='${cover(it.albums[it.albums.length - 1])}'" alt=""><div><small>Artiste</small><b>${esc(it.name)}</b><span>${it.albums.length} album${it.albums.length > 1 ? 's' : ''}</span></div></div>`
+      : r.top.kind === 'album'
+        ? `<div class="top-hit" data-album="${it.id}" tabindex="0"><img src="${cover(it.id)}" alt=""><div><small>Album</small><b>${esc(it.title)}</b><span>${esc(it.artist)}${it.year ? ' · ' + it.year : ''}</span></div></div>`
+        : '';
+  }
+  const nothing = !r.artists.length && !r.albums.length && !r.tracks.length;
+  view.innerHTML = `<div class="page">
+    <div class="search-head"><h1>${nothing ? 'Aucun résultat' : 'Résultats'}</h1><span class="muted">« ${esc(q)} »</span></div>
+    ${facets ? `<div class="facets">${facets}</div>` : ''}
+    ${top ? `<h2>Meilleur résultat</h2>${top}` : ''}
+    ${r.artists.length ? `<h2>Artistes</h2><div class="artist-grid">${r.artists.slice(0, 24).map(artistCard).join('')}</div>` : ''}
+    ${r.albums.length ? `<h2>Albums <span class="muted" style="font-size:14px;font-weight:400">${r.albums.length}</span></h2><div class="grid">${r.albums.map(albumCard).join('')}</div>` : ''}
+    ${r.tracks.length ? `<h2>Titres <span class="muted" style="font-size:14px;font-weight:400">${r.tracks.length} · double-clic ou OK pour lire</span></h2><div id="songs-box"></div>` : ''}
+    ${nothing ? `<p class="muted">Essayez un autre mot, ou parcourez :</p>${browseHTML()}` : ''}</div>`;
+  if (r.tracks.length) viewTracks(null, r.tracks.slice(0, 300))();
+  onImgLoad(view);
+  if (r.top) dominant(r.top.kind === 'album' ? r.top.item.id : r.top.item.albums?.at(-1) || r.top.item.albumId).then((c) => view.style.setProperty('--tint', c.join(',')));
+  cleanup = hydrateAvatars(view);
+  // « joue … » : lance directement le meilleur résultat
+  if (r.play && pendingPlay) {
+    pendingPlay = false;
+    const it = r.top?.item;
+    const ids = r.top?.kind === 'artist' ? it.albums.flatMap((x) => A.get(x).tracks) : r.top?.kind === 'album' ? it.tracks : r.tracks.map((t) => t.id);
+    if (ids?.length) { player.playList(ids, r.top?.kind === 'artist' ? -1 : 0, { shuffle: r.top?.kind === 'artist' }); toast(`Lecture : ${it?.name || it?.title || q}`); }
+  }
+}
+let pendingPlay = false;
 let searchTimer;
 $('#search').addEventListener('input', (e) => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => {
     const q = e.target.value.trim();
-    if (q) history.replaceState(null, '', `#/search/${encodeURIComponent(q)}`), route();
-    else location.hash = '#/' + store.get('lastView', 'albums');
-  }, 180);
+    history.replaceState(null, '', `#/search/${encodeURIComponent(q)}`); route();
+  }, 160);
 });
+$('#search').addEventListener('focus', () => { if (!location.hash.startsWith('#/search')) { history.pushState(null, '', '#/search/'); nav.remember(currentHash); route(); } });
+$('#search').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); pendingPlay = /^(joue|lance|mets|ecoute|écoute)\b/i.test(e.target.value.trim()); if (pendingPlay) route(); const first = $('#view [tabindex="0"], #view [data-album], #view [data-artist], #view button'); first && nav.focusEl(first); }
+  if (e.key === 'ArrowDown') { e.preventDefault(); nav.defaultFocus(); }
+});
+
+// ---------- Commande vocale ----------
+const MIC = '<svg viewBox="0 0 24 24" width="15" height="15"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
+let voiceReady = false, voiceCtl = null;
+voiceAvailable().then((ok) => { voiceReady = ok; $('#mic').classList.toggle('off', !ok); if (!ok) $('#mic').title = 'Recherche vocale : à installer (npm run install-voice)'; });
+async function startVoice() {
+  if (voiceCtl) return;
+  if (!voiceReady) { toast('Recherche vocale non installée : lancez « npm run install-voice » dans ~/Discotheque'); return; }
+  const box = $('#voice'), state = $('#voice-state'), orb = $('#voice-orb');
+  box.classList.add('open'); box.classList.remove('thinking'); box.setAttribute('aria-hidden', 'false');
+  state.textContent = 'Je vous écoute…'; $('#voice-hint').style.visibility = '';
+  nav.focusEl($('#voice-cancel'));
+  voiceCtl = new AbortController();
+  try {
+    const text = await listen({
+      signal: voiceCtl.signal,
+      onLevel: (l) => orb.style.setProperty('--l', l.toFixed(2)),
+      onState: (s) => { if (s === 'thinking') { box.classList.add('thinking'); state.textContent = 'Un instant…'; orb.style.setProperty('--l', 0); } },
+    });
+    if (!text) throw new Error('Je n’ai pas compris');
+    state.textContent = `« ${text} »`; $('#voice-hint').style.visibility = 'hidden';
+    await new Promise((r) => setTimeout(r, 650));
+    stopVoice();
+    pendingPlay = /^(joue|jouer|lance|lancer|mets|mettre|ecoute|écoute|écouter|ecouter)\b/i.test(text);
+    setSearch(text);
+  } catch (err) {
+    if (err.name === 'AbortError') return stopVoice();
+    box.classList.remove('thinking');
+    state.textContent = err.message === 'not-installed' ? 'Recherche vocale non installée' : err.name === 'NotAllowedError' ? 'Micro non autorisé' : err.message;
+    setTimeout(stopVoice, 1800);
+  } finally { voiceCtl = null; }
+}
+function stopVoice() { voiceCtl?.abort(); voiceCtl = null; const box = $('#voice'); box.classList.remove('open', 'thinking'); box.setAttribute('aria-hidden', 'true'); }
+$('#mic').addEventListener('click', (e) => { e.preventDefault(); startVoice(); });
+$('#voice-cancel').onclick = stopVoice;
+view.addEventListener('click', (e) => { if (e.target.closest('[data-voice]')) startVoice(); });
 
 // ---------- Clics globaux dans les vues ----------
 view.addEventListener('click', (e) => {
+  if (e.target.closest('[data-read]')) { openReader(); return; }
+  const chip = e.target.closest('[data-chip]'); if (chip) { setSearch(chip.dataset.chip); return; }
   const playBtn = e.target.closest('[data-play-album]');
   if (playBtn) { e.stopPropagation(); player.playList(A.get(playBtn.dataset.playAlbum).tracks, 0); return; }
   const card = e.target.closest('[data-album]'); if (card) { location.hash = `#/album/${card.dataset.album}`; return; }
@@ -594,12 +715,12 @@ function renderQueue() {
   box.innerHTML = `<div class="q-label">En cours</div>${item(player.pos)}<div class="q-label">Ensuite${player.shuffle ? ' · aléatoire' : ''}</div>${upcoming || '<div class="empty" style="padding:20px">Fin de la file</div>'}`;
 }
 $('#queue-list').addEventListener('click', (e) => { const q = e.target.closest('[data-q]'); if (q) player.jump(+q.dataset.q); });
-$('#b-queue').onclick = () => { $('#queue').classList.toggle('open'); $('#b-queue').classList.toggle('on'); };
+$('#b-queue').onclick = () => { const open = $('#queue').classList.toggle('open'); $('#b-queue').classList.toggle('on'); if (open && nav.usingKeys) setTimeout(() => { nav.makeFocusable($('#queue')); nav.focusEl($('#queue .q-item.current') || $('#q-close')); }, 50); };
 $('#q-close').onclick = () => { $('#queue').classList.remove('open'); $('#b-queue').classList.remove('on'); };
 
 // Plein écran « À l'écoute »
 const np = $('#np');
-const openNP = () => { if (!player.current) return; np.classList.add('open'); np.setAttribute('aria-hidden', 'false'); };
+const openNP = () => { if (!player.current) return; np.classList.add('open'); np.setAttribute('aria-hidden', 'false'); setTimeout(() => nav.focusEl($('#np [data-act="toggle"]')), 50); };
 const closeNP = () => { np.classList.remove('open'); np.setAttribute('aria-hidden', 'true'); };
 $('#p-now').onclick = openNP;
 $('#np-close').onclick = closeNP;
@@ -613,14 +734,58 @@ np.addEventListener('pointermove', (e) => {
   c.style.setProperty('--gx', 50 + px * 120 + '%'); c.style.setProperty('--gy', 50 + py * 120 + '%');
 });
 
-// Raccourcis clavier
+// ---------- Clavier et télécommande ----------
+// Flèches : se déplacer · OK/Entrée : valider · Retour/Échap : revenir · Espace/⏯ : lecture/pause
+// Lettres : commencer une recherche · Ctrl+M : recherche vocale
+const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
+function goBack() {
+  if ($('#voice').classList.contains('open')) return stopVoice();
+  if ($('#reader').classList.contains('open')) return closeReader();
+  if ($('#queue').classList.contains('open')) { $('#q-close').click(); return nav.focusEl($('#b-queue')); }
+  if (np.classList.contains('open')) { closeNP(); return nav.focusEl($('#p-now')); }
+  if (/^#\/?(album|artist|search)/.test(location.hash) && history.length > 1) return history.back();
+}
+function adjustSlider(el, dir) {
+  const step = dir === 'right' ? 1 : -1;
+  if (el.id === 'volume') { const v = Math.max(0, Math.min(1, audio.volume + step * 0.05)); audio.volume = v; setSlider(el, v); store.set('volume', v); }
+  else if (audio.duration) audio.currentTime = Math.max(0, Math.min(audio.duration - 1, audio.currentTime + step * 10));
+}
 window.addEventListener('keydown', (e) => {
-  if (e.target.matches('input')) { if (e.key === 'Escape') e.target.blur(); return; }
-  if (e.code === 'Space') { e.preventDefault(); player.toggle(); }
-  if (e.key === 'Escape') { closeNP(); $('#queue').classList.remove('open'); }
-  if ((e.metaKey || e.ctrlKey) && e.key === 'f') { e.preventDefault(); $('#search').focus(); }
-  if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowRight') player.next(false);
-  if ((e.metaKey || e.ctrlKey) && e.key === 'ArrowLeft') player.prev();
+  const inInput = e.target.matches('input, textarea');
+  const k = e.key;
+  // touches multimédia (télécommandes, claviers)
+  if (k === 'MediaPlayPause') { e.preventDefault(); return player.toggle(); }
+  if (k === 'MediaTrackNext') return player.next(false);
+  if (k === 'MediaTrackPrevious') return player.prev();
+  if (k === 'MediaStop') return audio.pause();
+  if (e.ctrlKey && k.toLowerCase() === 'm') { e.preventDefault(); return startVoice(); }
+  if ((e.metaKey || e.ctrlKey) && k === 'f') { e.preventDefault(); return $('#search').focus(); }
+  if ((e.metaKey || e.ctrlKey) && k === 'ArrowRight') return player.next(false);
+  if ((e.metaKey || e.ctrlKey) && k === 'ArrowLeft') return player.prev();
+  if (inInput) {
+    if (k === 'Escape') { e.preventDefault(); if (e.target.value) { e.target.value = ''; e.target.dispatchEvent(new Event('input')); } else { e.target.blur(); nav.defaultFocus(); } }
+    if (k === 'ArrowUp' || (k === 'ArrowLeft' && e.target.selectionStart === 0 && !e.target.value)) { e.preventDefault(); nav.move(k === 'ArrowUp' ? 'up' : 'left'); }
+    return;
+  }
+  if (k === 'Escape' || k === 'Backspace' || k === 'BrowserBack' || k === 'GoBack') { e.preventDefault(); return goBack(); }
+  if (e.code === 'Space') { e.preventDefault(); return player.toggle(); }
+  if (ARROWS[k]) {
+    e.preventDefault();
+    const a = document.activeElement;
+    if (a?.matches('.slider') && (k === 'ArrowLeft' || k === 'ArrowRight')) return adjustSlider(a, ARROWS[k]);
+    if (a?.id === 'reader-body' && (k === 'ArrowUp' || k === 'ArrowDown')) { a.scrollBy({ top: k === 'ArrowDown' ? 120 : -120, behavior: 'smooth' }); return; }
+    return nav.move(ARROWS[k]);
+  }
+  if (k === 'Enter') {
+    const a = document.activeElement;
+    if (a && a !== document.body && !a.matches('button, a')) { e.preventDefault(); a.click(); }
+    return;
+  }
+  // une lettre ou un chiffre tapé n'importe où commence une recherche
+  if (k.length === 1 && /[\p{L}\p{N}]/u.test(k) && !e.metaKey && !e.ctrlKey && !e.altKey && !nav.topOverlay()) {
+    e.preventDefault();
+    const input = $('#search'); input.focus(); input.value = k; input.dispatchEvent(new Event('input'));
+  }
 });
 
 $('#rescan').onclick = async () => {

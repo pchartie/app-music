@@ -16,7 +16,8 @@
       </div>
       <label class="search">
         <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
-        <input id="search" type="search" placeholder="Rechercher" autocomplete="off" spellcheck="false">
+        <input id="search" type="search" placeholder="Artiste, genre, année…" autocomplete="off" spellcheck="false">
+        <button class="mic" id="mic" title="Recherche vocale (Ctrl+M)" type="button"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
       </label>
       <nav>
         <div class="nav-title">Bibliothèque</div>
@@ -39,7 +40,7 @@
   </div>
 
   <footer class="player" id="player">
-    <div class="p-now" id="p-now" title="Afficher la lecture en cours">
+    <div class="p-now" id="p-now" title="Afficher la lecture en cours" tabindex="0" role="button">
       <div class="p-art"><img id="p-cover" alt=""></div>
       <div class="p-meta">
         <div class="p-title" id="p-title">Aucune lecture</div>
@@ -56,14 +57,14 @@
       </div>
       <div class="p-progress">
         <span id="t-cur">0:00</span>
-        <div class="slider" id="seek"><div class="slider-fill"></div><div class="slider-knob"></div></div>
+        <div class="slider" id="seek" tabindex="0" role="slider" aria-label="Position"><div class="slider-fill"></div><div class="slider-knob"></div></div>
         <span id="t-dur">0:00</span>
       </div>
     </div>
     <div class="p-right">
       <span class="badge" id="p-format"></span>
       <svg class="vol-ic" viewBox="0 0 24 24"><path d="M3 9.5h3.5L11 5.5v13l-4.5-4H3z" fill="currentColor"/><path d="M14.5 8.8a4.5 4.5 0 0 1 0 6.4M17 6.3a8 8 0 0 1 0 11.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
-      <div class="slider vol" id="volume"><div class="slider-fill"></div><div class="slider-knob"></div></div>
+      <div class="slider vol" id="volume" tabindex="0" role="slider" aria-label="Volume"><div class="slider-fill"></div><div class="slider-knob"></div></div>
       <button class="icon-btn small" id="b-queue" title="À suivre"><svg viewBox="0 0 24 24"><path d="M4 6h12M4 11h12M4 16h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M15 14.5v6l5-3z" fill="currentColor"/></svg></button>
     </div>
   </footer>
@@ -79,7 +80,7 @@
         <div class="np-album" id="np-album"></div>
         <div class="p-progress np-progress">
           <span id="np-cur">0:00</span>
-          <div class="slider" id="np-seek"><div class="slider-fill"></div><div class="slider-knob"></div></div>
+          <div class="slider" id="np-seek" tabindex="0" role="slider" aria-label="Position"><div class="slider-fill"></div><div class="slider-knob"></div></div>
           <span id="np-dur">0:00</span>
         </div>
         <div class="np-controls">
@@ -96,6 +97,20 @@
     <div class="queue-head"><h3>À suivre</h3><button class="link-btn" id="q-close">Fermer</button></div>
     <div class="queue-list" id="queue-list"></div>
   </aside>
+
+  <section class="reader" id="reader" aria-hidden="true">
+    <div class="reader-panel">
+      <header><div><div class="eyebrow" id="reader-kind"></div><h2 id="reader-title"></h2></div><button class="icon-btn" id="reader-close" title="Fermer (Échap)"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg></button></header>
+      <article id="reader-body" tabindex="0"></article>
+    </div>
+  </section>
+
+  <section class="voice" id="voice" aria-hidden="true">
+    <div class="voice-orb" id="voice-orb"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></div>
+    <div class="voice-state" id="voice-state">Je vous écoute…</div>
+    <div class="voice-hint" id="voice-hint">Dites par exemple « Metallica », « rock des années 80 » ou « joue Renaud »</div>
+    <button class="btn glass" id="voice-cancel">Annuler</button>
+  </section>
 
   <div class="toast" id="toast"></div>
   <script src="app.js" type="module"></script>

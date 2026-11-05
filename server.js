@@ -323,11 +323,13 @@ async function findReleaseGroup(al) {
   return rgs.find((g) => norm(g.title) === t && g['primary-type'] === 'Album') || rgs.find((g) => norm(g.title) === t) || rgs.find((g) => g.score >= 90) || null;
 }
 
+const metaMem = new Map(); // clé -> contenu des fichiers cache/meta/*.json
+for (const f of fs.readdirSync(META)) if (f.endsWith('.json')) { try { metaMem.set(f.slice(0, -5), JSON.parse(fs.readFileSync(path.join(META, f), 'utf8'))); } catch {} }
+async function saveMeta(key, data) { metaMem.set(key, data); await fsp.writeFile(path.join(META, key + '.json'), JSON.stringify(data)); }
 async function cached(key, fn) {
-  const f = path.join(META, key + '.json');
-  try { return JSON.parse(await fsp.readFile(f, 'utf8')); } catch {}
+  if (metaMem.has(key)) return metaMem.get(key);
   const { data, complete } = await fn();
-  if (complete) await fsp.writeFile(f, JSON.stringify(data)); // on ne fige pas un résultat incomplet (réseau coupé)
+  if (complete) await saveMeta(key, data); // on ne fige pas un résultat incomplet (réseau coupé)
   return data;
 }
 
@@ -455,11 +457,26 @@ async function albumInfo(al) {
 // ---------- Synchronisation des métadonnées (seul endroit qui touche Internet) ----------
 // L'interface ne lit que le cache local : l'app fonctionne entièrement hors ligne.
 // Quand un album/artiste n'a pas encore ses infos, elles sont rapatriées ici, une seule fois.
-async function readMeta(key) { try { return JSON.parse(await fsp.readFile(path.join(META, key + '.json'), 'utf8')); } catch { return null; } }
-const hasMeta = (key) => fs.existsSync(path.join(META, key + '.json'));
+async function readMeta(key) { return metaMem.get(key) || null; }
+const hasMeta = (key) => metaMem.has(key);
 const hasImg = (ar, kind) => fs.existsSync(path.join(ARTIST_IMG, `${ar.id}-${kind}.jpg`)) || fs.existsSync(path.join(ARTIST_IMG, `${ar.id}-${kind}.jpg.none`));
+// Article Wikipédia complet (texte brut), pour lire la biographie sans Internet
+const needsFullText = (key) => { const m = metaMem.get(key); return !!(m?.wiki && m.wiki.full === undefined); };
+async function wikiFull(w) {
+  const r = await fetchJSON(`https://${w.lang}.wikipedia.org/w/api.php?action=query&prop=extracts&explaintext=1&exsectionformat=wiki&redirects=1&format=json&titles=${encodeURIComponent(w.title)}`);
+  return Object.values(r.query?.pages || {})[0]?.extract || '';
+}
+async function fillFullTexts() {
+  for (const key of [...metaMem.keys()].filter(needsFullText)) {
+    const m = metaMem.get(key);
+    try { m.wiki.full = await wikiFull(m.wiki); await saveMeta(key, m); }
+    catch (e) { console.warn('Article', m.wiki.title, e.message); if (!(await isOnline())) return; } // réseau coupé : on réessaiera plus tard
+    await sleep(600); // politesse envers Wikipédia
+  }
+}
 function missing() {
   return {
+    texts: [...metaMem.keys()].filter(needsFullText),
     artists: library.artists.filter((ar) => !hasMeta('artist-' + ar.id) || !hasImg(ar, 'thumb') || !hasImg(ar, 'fanart')),
     albums: library.albums.filter((al) => !hasMeta('album-' + al.id)),
   };
@@ -471,17 +488,18 @@ let syncing = false, lastSync = null, online = null;
 async function syncMetadata() {
   if (syncing) return;
   const todo = missing();
-  if (!todo.artists.length && !todo.albums.length) { online = online ?? null; return; }
+  if (!todo.artists.length && !todo.albums.length && !todo.texts.length) return;
   syncing = true;
   try {
     online = await isOnline();
     if (!online) { console.log(`Hors ligne : ${todo.artists.length} artiste(s) et ${todo.albums.length} album(s) en attente de métadonnées`); return; }
-    console.log(`Synchronisation : ${todo.artists.length} artiste(s), ${todo.albums.length} album(s)`);
+    console.log(`Synchronisation : ${todo.artists.length} artiste(s), ${todo.albums.length} album(s), ${todo.texts.length} article(s)`);
     for (const ar of todo.artists) { await artistInfo(ar).catch(() => {}); await artistImage(ar, 'thumb'); await artistImage(ar, 'fanart'); }
     for (const al of todo.albums) await albumInfo(al).catch(() => {});
+    await fillFullTexts();
     lastSync = new Date().toISOString();
     const left = missing();
-    console.log(`Synchronisation terminée (${left.artists.length + left.albums.length} élément(s) restant(s))`);
+    console.log(`Synchronisation terminée (${left.artists.length + left.albums.length + left.texts.length} élément(s) restant(s))`);
   } finally { syncing = false; }
 }
 // Réessaie régulièrement s'il reste des éléments (ex. connexion revenue)
@@ -501,6 +519,22 @@ function watchMusic() {
     console.log('Surveillance de', MUSIC_DIR);
   } catch (e) { console.warn('Surveillance impossible :', e.message); }
 }
+
+// ---------- Commande vocale (whisper.cpp, entièrement local) ----------
+const WHISPER = path.join(ROOT, 'tools', 'whisper.cpp', 'build', 'bin', 'whisper-cli');
+const WHISPER_MODEL = path.join(ROOT, 'tools', 'ggml-small-q5_1.bin');
+const voiceReady = () => fs.existsSync(WHISPER) && fs.existsSync(WHISPER_MODEL);
+async function transcribe(wav) {
+  const f = path.join(os.tmpdir(), `discotheque-voix-${process.pid}-${Date.now()}.wav`);
+  await fsp.writeFile(f, wav);
+  try {
+    // Les noms d'artistes de la bibliothèque guident la reconnaissance (« Rammstein », « In Flames »…)
+    const prompt = 'Recherche musicale : ' + library.artists.map((a) => a.name).join(', ') + '.';
+    const { stdout } = await exec(WHISPER, ['-m', WHISPER_MODEL, '-f', f, '-l', 'fr', '-nt', '-np', '-t', String(Math.min(8, os.cpus().length)), '--prompt', prompt.slice(0, 900)], { timeout: 60000 });
+    return stdout.replace(/\[.*?\]|\(.*?\)/g, '').replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
+  } finally { fsp.rm(f, { force: true }).catch(() => {}); }
+}
+const readBody = (req, max = 10e6) => new Promise((res, rej) => { const chunks = []; let n = 0; req.on('data', (c) => { n += c.length; if (n > max) { rej(new Error('trop gros')); req.destroy(); } else chunks.push(c); }); req.on('end', () => res(Buffer.concat(chunks))); req.on('error', rej); });
 
 // ---------- HTTP ----------
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.flac': 'audio/flac', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.wav': 'audio/wav', '.aiff': 'audio/aiff', '.aif': 'audio/aiff' };
@@ -534,21 +568,29 @@ const server = http.createServer(async (req, res) => {
   try {
     if (p === '/api/library') {
       return json(res, {
-        albums: library.albums,
-        artists: library.artists,
+        albums: library.albums.map((a) => { const m = metaMem.get('album-' + a.id) || {}; return { ...a, genres: m.genres || [], label: m.label || null, firstRelease: m.firstRelease || null }; }),
+        artists: library.artists.map((a) => { const m = metaMem.get('artist-' + a.id) || {}; return { ...a, tags: m.tags || [], country: m.country || null, area: m.beginArea || null, kind: m.type || null, begin: m.begin || null }; }),
         tracks: library.tracks.map(({ path: _p, mtime: _m, albumDir: _d, ...t }) => t),
         scannedAt: library.scannedAt,
         scanning, scanProgress,
         bytes: library.tracks.reduce((s, t) => s + (t.size || 0), 0),
         folder: MUSIC_DIR.replace(os.homedir(), '~'),
-        meta: (() => { const m = missing(); return { pendingArtists: m.artists.length, pendingAlbums: m.albums.length, syncing, online, lastSync }; })(),
+        meta: (() => { const m = missing(); return { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync }; })(),
       });
     }
     if (p === '/api/status') {
       const m = missing();
-      return json(res, { scannedAt: library.scannedAt, scanning, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length, syncing, online, lastSync } });
+      return json(res, { scannedAt: library.scannedAt, scanning, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync } });
     }
     if (p === '/api/rescan' && req.method === 'POST') { scan(); return json(res, { ok: true }); }
+    if (p === '/api/voice/status') return json(res, { available: voiceReady() });
+    if (p === '/api/voice' && req.method === 'POST') {
+      if (!voiceReady()) return json(res, { error: 'not-installed' }, 501);
+      const t0 = Date.now();
+      const text = await transcribe(await readBody(req));
+      console.log(`Voix : « ${text} » (${Date.now() - t0} ms)`);
+      return json(res, { text });
+    }
     if (p === '/api/sync' && req.method === 'POST') { syncMetadata(); return json(res, { ok: true }); }
     let m;
     if ((m = p.match(/^\/api\/artist\/([\w]+)$/))) {
@@ -594,7 +636,7 @@ if (process.argv.includes('--sync')) {
   await scan();
   await syncMetadata();
   const left = missing();
-  console.log(left.artists.length + left.albums.length ? `Il reste ${left.artists.length} artiste(s) et ${left.albums.length} album(s) sans métadonnées (connexion ?).` : 'Tout est disponible hors ligne.');
+  console.log(left.artists.length + left.albums.length + left.texts.length ? `Il reste ${left.artists.length} artiste(s), ${left.albums.length} album(s) et ${left.texts.length} article(s) à récupérer (connexion ?).` : 'Tout est disponible hors ligne.');
   process.exit(0);
 } else {
   server.listen(PORT, '127.0.0.1', () => {
