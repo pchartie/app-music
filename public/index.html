@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Discothèque</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'><rect width='64' height='64' rx='14' fill='%23fa2d48'/><circle cx='32' cy='32' r='17' fill='none' stroke='white' stroke-width='4'/><circle cx='32' cy='32' r='4' fill='white'/></svg>">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="brand-mark"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="7.5" fill="none" stroke="currentColor" stroke-width="1.8"/><circle cx="12" cy="12" r="1.8" fill="currentColor"/></svg></div>
+        <span>Discothèque</span>
+      </div>
+      <label class="search">
+        <svg viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M15.5 15.5 21 21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+        <input id="search" type="search" placeholder="Rechercher" autocomplete="off" spellcheck="false">
+      </label>
+      <nav>
+        <div class="nav-title">Bibliothèque</div>
+        <a href="#/flow" data-nav="flow"><span class="nav-ic ic-flow"><svg viewBox="0 0 24 24"><path d="M1.8 7.6 6.6 6.3v11.4l-4.8-1.3z" fill="currentColor" opacity=".55"/><path d="M22.2 7.6 17.4 6.3v11.4l4.8-1.3z" fill="currentColor" opacity=".55"/><rect x="7.6" y="6.6" width="8.8" height="10.8" rx="1.3" fill="currentColor"/><path d="M7.6 19.2h8.8" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" opacity=".35"/></svg></span>Cover Flow</a>
+        <a href="#/albums" data-nav="albums"><span class="nav-ic ic-albums"><svg viewBox="0 0 24 24"><circle cx="15.2" cy="12" r="7.3" fill="currentColor" opacity=".55"/><circle cx="15.2" cy="12" r="4.6" fill="none" stroke="currentColor" stroke-width=".7" opacity=".6"/><rect x="2.6" y="4.2" width="11.6" height="15.6" rx="1.6" fill="currentColor"/><circle cx="8.4" cy="12" r="2.4" fill="none" stroke="#ff8a1e" stroke-width="1.3"/></svg></span>Albums</a>
+        <a href="#/artists" data-nav="artists"><span class="nav-ic ic-artists"><svg viewBox="0 0 24 24"><rect x="8.6" y="2.4" width="6.8" height="11.6" rx="3.4" fill="currentColor"/><path d="M9.6 6h4.8M9.6 8.2h4.8" stroke="#8e44ec" stroke-width=".9" stroke-linecap="round" opacity=".6"/><path d="M5.6 10.8a6.4 6.4 0 0 0 12.8 0M12 17.2v3.6M8.6 20.8h6.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span>Artistes</a>
+        <a href="#/tracks" data-nav="tracks"><span class="nav-ic ic-tracks"><svg viewBox="0 0 24 24"><path d="M9.4 17.2V6.4l10-2.2v10.6" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/><path d="M9.4 8.6l10-2.2" stroke="currentColor" stroke-width="2.6"/><ellipse cx="6.6" cy="17.4" rx="2.9" ry="2.4" fill="currentColor"/><ellipse cx="16.6" cy="15" rx="2.9" ry="2.4" fill="currentColor"/></svg></span>Titres</a>
+      </nav>
+      <div class="sidebar-foot">
+        <div class="lib-card">
+          <div class="lib-head"><span>Ma bibliothèque</span>
+            <button id="rescan" title="Actualiser la bibliothèque"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4.5v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+          <div class="lib-stats" id="stats"></div>
+          <div class="lib-meta" id="lib-meta"></div>
+        </div>
+      </div>
+    </aside>
+
+    <main id="view" tabindex="-1"></main>
+  </div>
+
+  <footer class="player" id="player">
+    <div class="p-now" id="p-now" title="Afficher la lecture en cours">
+      <div class="p-art"><img id="p-cover" alt=""></div>
+      <div class="p-meta">
+        <div class="p-title" id="p-title">Aucune lecture</div>
+        <div class="p-sub" id="p-sub">Choisissez un album</div>
+      </div>
+    </div>
+    <div class="p-center">
+      <div class="p-controls">
+        <button class="icon-btn small" id="b-shuffle" title="Aléatoire"><svg viewBox="0 0 24 24"><path d="M3 7h3.5c3.5 0 4.5 10 8 10H20M3 17h3.5c1.4 0 2.4-1.6 3.3-3.6M14.5 7H20M17.5 4 20.5 7l-3 3M17.5 14l3 3-3 3M11.3 9.4C12.2 8 13.1 7 14.5 7" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        <button class="icon-btn" id="b-prev" title="Précédent"><svg viewBox="0 0 24 24"><path d="M11.5 12 21 5.5v13zM2.5 12 12 5.5v13z" fill="currentColor"/></svg></button>
+        <button class="icon-btn big" id="b-play" title="Lecture"><svg class="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg><svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor"/><rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor"/></svg></button>
+        <button class="icon-btn" id="b-next" title="Suivant"><svg viewBox="0 0 24 24"><path d="M12.5 12 3 5.5v13zM21.5 12 12 5.5v13z" fill="currentColor"/></svg></button>
+        <button class="icon-btn small" id="b-repeat" title="Répéter"><svg viewBox="0 0 24 24"><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H19m-3-3 3 3-3 3M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H5m3 3-3-3 3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="repeat-one">1</span></button>
+      </div>
+      <div class="p-progress">
+        <span id="t-cur">0:00</span>
+        <div class="slider" id="seek"><div class="slider-fill"></div><div class="slider-knob"></div></div>
+        <span id="t-dur">0:00</span>
+      </div>
+    </div>
+    <div class="p-right">
+      <span class="badge" id="p-format"></span>
+      <svg class="vol-ic" viewBox="0 0 24 24"><path d="M3 9.5h3.5L11 5.5v13l-4.5-4H3z" fill="currentColor"/><path d="M14.5 8.8a4.5 4.5 0 0 1 0 6.4M17 6.3a8 8 0 0 1 0 11.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+      <div class="slider vol" id="volume"><div class="slider-fill"></div><div class="slider-knob"></div></div>
+      <button class="icon-btn small" id="b-queue" title="À suivre"><svg viewBox="0 0 24 24"><path d="M4 6h12M4 11h12M4 16h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M15 14.5v6l5-3z" fill="currentColor"/></svg></button>
+    </div>
+  </footer>
+
+  <section class="np" id="np" aria-hidden="true">
+    <div class="np-bg"><img id="np-bg1" alt=""><img id="np-bg2" alt=""></div>
+    <button class="np-close icon-btn" id="np-close" title="Fermer (Échap)"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <div class="np-body">
+      <div class="np-stage" id="np-stage"><div class="np-cover" id="np-cover"><img id="np-img" alt=""><div class="glare"></div></div></div>
+      <div class="np-info">
+        <div class="np-title" id="np-title"></div>
+        <a class="np-artist" id="np-artist"></a>
+        <div class="np-album" id="np-album"></div>
+        <div class="p-progress np-progress">
+          <span id="np-cur">0:00</span>
+          <div class="slider" id="np-seek"><div class="slider-fill"></div><div class="slider-knob"></div></div>
+          <span id="np-dur">0:00</span>
+        </div>
+        <div class="np-controls">
+          <button class="icon-btn" data-act="prev"><svg viewBox="0 0 24 24"><path d="M11.5 12 21 5.5v13zM2.5 12 12 5.5v13z" fill="currentColor"/></svg></button>
+          <button class="icon-btn big" data-act="toggle"><svg class="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg><svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor"/><rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor"/></svg></button>
+          <button class="icon-btn" data-act="next"><svg viewBox="0 0 24 24"><path d="M12.5 12 3 5.5v13zM21.5 12 12 5.5v13z" fill="currentColor"/></svg></button>
+        </div>
+        <div class="np-format" id="np-format"></div>
+      </div>
+    </div>
+  </section>
+
+  <aside class="queue" id="queue" aria-hidden="true">
+    <div class="queue-head"><h3>À suivre</h3><button class="link-btn" id="q-close">Fermer</button></div>
+    <div class="queue-list" id="queue-list"></div>
+  </aside>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js" type="module"></script>
+</body>
+</html>
