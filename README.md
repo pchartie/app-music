@@ -23,8 +23,7 @@ chemin à saisir, ou dossiers détectés automatiquement). Il reste modifiable d
 
 **Comment ça tourne** : `server.js` est un petit serveur web local (127.0.0.1:4321, invisible depuis le réseau)
 qui indexe la musique et sert l'audio, les pochettes et les fiches ; l'interface est une page web. Le lanceur
-démarre le serveur en arrière-plan s'il ne tourne pas, puis ouvre une fenêtre d'application dédiée
-(Chrome, Brave ou Edge ; sinon le navigateur par défaut). `npm start` lance le serveur au premier plan.
+démarre le serveur en arrière-plan s'il ne tourne pas, puis ouvre l'interface dans le navigateur par défaut. `npm start` lance le serveur au premier plan.
 
 Les fichiers audio ne sont **jamais modifiés ni déplacés** : l'app ne fait que les lire.
 Tout ce qui est dérivé (pochettes redimensionnées, fiches, photos) va dans `cache/`,
