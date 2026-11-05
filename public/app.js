@@ -2,6 +2,7 @@
 import { buildIndex, search as runSearch } from './search.js';
 import * as nav from './keynav.js';
 import { listen, voiceAvailable } from './voice.js';
+import { liquidGlass } from './glass.js';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -837,6 +838,8 @@ setInterval(async () => {
     } else if (JSON.stringify(st.meta) !== JSON.stringify(LIB.meta)) { LIB.meta = st.meta; $('#lib-meta').lastElementChild.lastElementChild.innerHTML = metaState(st.meta); }
   } catch {}
 }, 10000);
+
+liquidGlass($('#player'));
 
 // ---------- Démarrage ----------
 (async () => {

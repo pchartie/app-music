@@ -484,3 +484,20 @@ body.flow-mode .lib-card { background: rgba(255, 255, 255, .04); }
 .tile:hover .tile-art img, .keys .tile:focus-visible .tile-art img { transform: rotate(calc(22deg - var(--i) * 11deg)) translateY(-6px); }
 .tile.style .tile-art img { width: 92px; height: 92px; }
 .search-sub { margin: 6px 0 0; color: var(--text-2); font-size: 14px; }
+
+/* ---------- Lecteur en verre liquide ---------- */
+.player > * { position: relative; z-index: 1; }
+/* reflets : liseré lumineux, éclat qui suit la souris */
+.player::before { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; z-index: 0;
+  background:
+    radial-gradient(420px 140px at var(--mx, 30%) var(--my, -30%), rgba(255, 255, 255, .16), transparent 65%),
+    linear-gradient(180deg, rgba(255, 255, 255, .09), rgba(255, 255, 255, .02) 38%, transparent 60%, rgba(255, 255, 255, .03));
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .42), inset 0 -1px 0 rgba(255, 255, 255, .1), inset 1px 0 0 rgba(255, 255, 255, .14), inset -1px 0 0 rgba(255, 255, 255, .14), inset 0 0 18px rgba(255, 255, 255, .04); }
+/* irisation très discrète sur le contour (diffraction) */
+.player::after { content: ""; position: absolute; inset: 0; border-radius: inherit; pointer-events: none; padding: 1px; opacity: .55;
+  background: conic-gradient(from calc(var(--mx, 30%) * 3.6deg) at 50% 50%, rgba(255, 90, 140, .55), rgba(255, 210, 90, .45), rgba(120, 255, 200, .45), rgba(90, 170, 255, .55), rgba(190, 120, 255, .5), rgba(255, 90, 140, .55));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0); -webkit-mask-composite: xor; mask: linear-gradient(#000 0 0) content-box exclude, linear-gradient(#000 0 0); }
+/* Chromium : vraie réfraction + dispersion chromatique du fond */
+body.liquid .player { background: rgba(14, 14, 16, .36); border-color: transparent;
+  backdrop-filter: var(--glass-filter) saturate(175%) brightness(1.08); -webkit-backdrop-filter: var(--glass-filter) saturate(175%) brightness(1.08); }
+body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p-progress { text-shadow: 0 1px 6px rgba(0, 0, 0, .55); }
