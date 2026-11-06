@@ -6,15 +6,19 @@ navigation complète au clavier ou à la télécommande. **Fonctionne entièreme
 
 ![Node](https://img.shields.io/badge/node-%E2%89%A518-green) ![macOS](https://img.shields.io/badge/macOS-oui-lightgrey)
 
-## Démarrage
+## Installation
 
-Prérequis : macOS et [Node.js](https://nodejs.org) 18 ou plus.
+Sur un Mac, ouvrir le **Terminal** (⌘ Espace, « Terminal ») et coller cette ligne :
 
 ```sh
-git clone https://github.com/pchartie/discotheque && cd discotheque
-npm install
-npm run app        # lance l'app
+curl -fsSL https://raw.githubusercontent.com/pchartie/discotheque/main/install.sh | zsh
 ```
+
+C'est tout : Node.js est téléchargé si besoin (sans droits administrateur), l'app est installée dans `~/Discotheque`
+puis s'ouvre dans le navigateur. Ensuite, double-clic sur le raccourci **Discothèque** du bureau.
+Relancer la même ligne met l'app à jour (le cache et le dossier de musique sont conservés).
+
+Développement : `git clone`, puis `npm install` et `npm run app` (ou `npm start` pour le serveur au premier plan).
 
 Au premier lancement, l'app s'installe dans `~/Applications/Discothèque.app` avec un raccourci
 « Discothèque » sur le bureau (une seule fois : supprimé, il n'est pas recréé ; `npm run make-app` le refait).
