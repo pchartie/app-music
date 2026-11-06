@@ -17,8 +17,10 @@ Voir README.md pour l'usage et l'organisation du code.
 - Choix déjà tranchés par l'utilisateur : pas de verso de boîte avec la liste des titres ; Wikipédia limité à la
   première phrase, sans lien externe ; pas de halo qui suit le curseur sur le lecteur ; l'app s'ouvre dans le navigateur
   par défaut (pas de fenêtre « app » dédiée).
-- Tester avant de livrer (instances isolées : `PORT`, `MUSIC_DIR`, `DISCO_CONFIG`, `DISCO_CACHE`, `DISCO_OFFLINE=1`),
-  puis commit + push sur `main`.
+- Tester avant de livrer : **`npm test` doit passer** (serveur, recherche, interface dans Brave/Chrome sans fenêtre,
+  sur une bibliothèque factice générée dans `tests/fixtures.js`). Toute nouvelle fonction ou correction ajoute son test.
+  Essais manuels sur instance isolée : `PORT`, `MUSIC_DIR`, `DISCO_CONFIG`, `DISCO_CACHE`, `DISCO_OFFLINE=1`.
+  Puis commit + push sur `main`.
 
 ## Sur une nouvelle machine
 

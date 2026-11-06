@@ -267,11 +267,13 @@ async function ensureCover(album, picture) {
 async function downloadCover(album, dest) {
   try {
     const q = encodeURIComponent(`${album.artist} ${album.title}`);
-    const r = await fetchJSON(`https://itunes.apple.com/search?term=${q}&entity=album&limit=5`);
+    // un seul essai : l'indexation ne doit pas attendre le réseau (sans connexion, ~20 s par album sans pochette) ;
+    // la pochette est retentée à la prochaine indexation
+    const r = await fetchJSON(`https://itunes.apple.com/search?term=${q}&entity=album&limit=5`, 1);
     const hit = r.results?.find((x) => norm(x.artistName).includes(norm(album.artist).slice(0, 6))) || r.results?.[0];
     if (!hit) return false;
     const url = hit.artworkUrl100.replace('100x100bb', '1200x1200bb');
-    const img = await fetch(url, { headers: { 'User-Agent': UA } });
+    const img = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
     if (!img.ok) return false;
     await fsp.writeFile(dest, Buffer.from(await img.arrayBuffer()));
     return true;
