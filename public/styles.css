@@ -359,6 +359,20 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .q-item span { font-size: 12px; color: var(--text-2); }
 .q-item.current b { color: var(--accent); }
 .q-label { font-size: 11.5px; font-weight: 600; color: var(--text-3); padding: 12px 8px 4px; }
+/* Glisser-déposer vers « À suivre » */
+.q-item[draggable] { cursor: grab; }
+.q-item.dragging { opacity: .35; }
+.q-item.drop-before { box-shadow: inset 0 2px 0 var(--accent); border-radius: 0 0 8px 8px; }
+.queue-list.drop-end::after { content: ''; display: block; height: 2px; margin: 2px 8px 0; border-radius: 2px; background: var(--accent); }
+.queue { transition: transform .5s var(--ease), border-color .25s, box-shadow .25s; }
+.queue.drop-over { border-color: var(--accent); box-shadow: 0 20px 50px -14px rgba(0, 0, 0, .35), 0 0 0 3px var(--accent-soft); }
+.queue .empty small { display: block; margin-top: 6px; font-size: 12px; color: var(--text-3); }
+.drag-ghost { position: fixed; top: -200px; left: 0; display: flex; gap: 10px; align-items: center; max-width: 260px; padding: 8px 14px 8px 8px; border-radius: 12px; background: #1c1c1e; border: 1px solid rgba(255, 255, 255, .12); color: var(--text); font-size: 13px; }
+.drag-ghost img { width: 36px; height: 36px; border-radius: 5px; flex: none; }
+.drag-ghost div { min-width: 0; }
+.drag-ghost b { display: block; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.drag-ghost span { font-size: 12px; color: var(--text-2); }
+tr[data-track][draggable] { -webkit-user-drag: element; }
 
 .toast { position: fixed; left: 50%; bottom: calc(var(--player-h) + 34px); transform: translate(-50%, 20px); background: var(--glass); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px); border: 1px solid var(--line); padding: 9px 16px; border-radius: 12px; font-size: 13px; opacity: 0; pointer-events: none; transition: all .4s var(--ease); z-index: 50; box-shadow: 0 10px 30px -10px rgba(0, 0, 0, .3); }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }

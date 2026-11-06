@@ -93,7 +93,7 @@ function attachTilt(root, max = 12) {
 function onImgLoad(root) { $$('img[data-fade]', root).forEach((i) => { if (i.complete && i.naturalWidth) i.classList.add('loaded'); else i.addEventListener('load', () => i.classList.add('loaded'), { once: true }); }); }
 
 const albumCard = (a) => `
-  <div class="card tilt-host" data-album="${a.id}">
+  <div class="card tilt-host" data-album="${a.id}" draggable="true">
     <div class="tilt"><img data-fade loading="lazy" src="${cover(a.id)}" alt=""><div class="glare"></div>
       <button class="card-play" data-play-album="${a.id}" title="Lire">${ICON.play}</button></div>
     <div class="card-title">${esc(a.title)}</div>
@@ -330,7 +330,7 @@ function trackRows(ids, { showArtist, albumArtist, showAlbum, rank } = {}) {
     const t = T.get(id); let head = '';
     if (multi && t.disc !== disc) { disc = t.disc; head = `<tr class="disc-head"><td colspan="3">Disque ${disc}</td></tr>`; }
     const feat = showArtist || (albumArtist && t.artist !== albumArtist);
-    return `${head}<tr class="tr ${player.current === id ? 'playing' : ''}" data-track="${id}" data-n="${n}">
+    return `${head}<tr class="tr ${player.current === id ? 'playing' : ''}" data-track="${id}" data-n="${n}" draggable="true">
       <td><span class="num">${rank ? n + 1 : t.trackNo || n + 1}</span><span class="num-play">${ICON.play}</span>${ICON.eq}</td>
       <td><div class="tt">${esc(showTitle(t.title))}${t.hit ? STAR : ''}</div>${showAlbum ? `<div class="ta">${esc(t.album)}</div>` : feat ? `<div class="ta">${esc(t.artist)}</div>` : ''}</td>
       <td>${fmtTime(t.duration)}</td></tr>`;
@@ -483,7 +483,7 @@ function viewTracks(_, filtered) {
     const th = (k, l, cls = '') => `<th data-k="${k}" class="${cls}">${l}${sort.k === k ? (sort.d > 0 ? ' ▲' : ' ▼') : ''}</th>`;
     const html = `<table class="songs"><colgroup><col style="width:38%"><col style="width:22%"><col style="width:26%"><col style="width:7%"><col style="width:7%"></colgroup>
       <thead><tr>${th('title', 'Titre')}${th('artist', 'Artiste')}${th('album', 'Album')}${th('year', 'Année', 'r')}${th('duration', 'Durée', 'r')}</tr></thead>
-      <tbody>${list.map((t, n) => `<tr data-track="${t.id}" data-n="${n}" class="${player.current === t.id ? 'playing' : ''}">
+      <tbody>${list.map((t, n) => `<tr data-track="${t.id}" data-n="${n}" draggable="true" class="${player.current === t.id ? 'playing' : ''}">
         <td><div class="cell-title"><img loading="lazy" src="${cover(t.albumId)}" alt=""><span class="tt">${esc(showTitle(t.title))}</span>${t.hit ? STAR : ''}</div></td>
         <td><a href="#/artist/${t.artistId}">${esc(t.artist)}</a></td><td><a href="#/album/${t.albumId}">${esc(t.album)}</a></td>
         <td class="r">${t.year || ''}</td><td class="r">${fmtTime(t.duration)}</td></tr>`).join('')}</tbody></table>`;
@@ -708,6 +708,19 @@ const player = {
   prev() { if (audio.currentTime > 3 || this.pos === 0) { audio.currentTime = 0; return; } this.pos--; this.load(true); },
   toggle() { if (!this.current) { const a = LIB.albums[0]; if (a) this.playList(a.tracks); return; } audio.paused ? audio.play() : audio.pause(); },
   jump(i) { this.pos = i; this.load(true); },
+  // Ajout et réorganisation de la file (positions = rangs dans l'ordre de lecture, toujours après le titre en cours)
+  insert(ids, at) {
+    if (!this.queue.length) return this.playList(ids, 0);
+    const base = this.queue.length; this.queue.push(...ids);
+    this.order.splice(at, 0, ...ids.map((_, k) => base + k)); this.settle();
+  },
+  move(from, to) { const [x] = this.order.splice(from, 1); this.order.splice(to > from ? to - 1 : to, 0, x); this.settle(); },
+  settle() {
+    // hors aléatoire, la file reste dans l'ordre affiché (désactiver l'aléatoire plus tard ne défait pas les ajouts)
+    if (!this.shuffle) { this.queue = this.order.map((i) => this.queue[i]); this.order = this.queue.map((_, i) => i); }
+    store.set('session', { queue: this.queue, order: this.order, pos: this.pos });
+    renderQueue();
+  },
 };
 function shuffleArr(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
@@ -797,11 +810,64 @@ if ('mediaSession' in navigator) {
 
 // File d'attente
 function renderQueue() {
-  const box = $('#queue-list'); if (!player.queue.length) { box.innerHTML = '<div class="empty">Rien en attente.</div>'; return; }
-  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}"><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></div></div>`; };
+  const box = $('#queue-list'); if (!player.queue.length) { box.innerHTML = '<div class="empty">Rien en attente.<br><small>Glissez des titres ou des albums ici.</small></div>'; return; }
+  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></div></div>`; };
   const upcoming = player.order.slice(player.pos + 1, player.pos + 101).map((_, k) => item(player.pos + 1 + k)).join('');
+  const top = box.scrollTop;
   box.innerHTML = `<div class="q-label">En cours</div>${item(player.pos)}<div class="q-label">Ensuite${player.shuffle ? ' · aléatoire' : ''}</div>${upcoming || '<div class="empty" style="padding:20px">Fin de la file</div>'}`;
+  box.scrollTop = top;
 }
+
+// Glisser-déposer vers « À suivre » : titres, albums entiers, et réorganisation de la file
+let drag = null;
+document.addEventListener('dragstart', (e) => {
+  const q = e.target.closest?.('#queue-list .q-item[draggable]');
+  const tr = !q && e.target.closest?.('tr[data-track]');
+  const card = !q && !tr && e.target.closest?.('[data-album]:not([data-disc])');
+  if (!q && !tr && !card) return;
+  const ids = q ? [player.queue[player.order[+q.dataset.q]]] : tr ? [tr.dataset.track] : A.get(card.dataset.album)?.tracks || [];
+  if (!ids.length) return;
+  const t = T.get(ids[0]), al = card && A.get(card.dataset.album);
+  drag = { ids, from: q ? +q.dataset.q : null, opened: false, dropped: false };
+  e.dataTransfer.effectAllowed = q ? 'move' : 'copy';
+  e.dataTransfer.setData('text/plain', al ? `${al.title} — ${al.artist}` : `${t.title} — ${t.artist}`);
+  // vignette qui suit le pointeur
+  const ghost = document.createElement('div'); ghost.className = 'drag-ghost';
+  ghost.innerHTML = `<img src="${cover(t.albumId)}" alt=""><div><b>${esc(al ? al.title : showTitle(t.title))}</b><span>${esc(al ? `${al.tracks.length} titres` : t.artist)}</span></div>`;
+  document.body.append(ghost); e.dataTransfer.setDragImage(ghost, 24, 24); setTimeout(() => ghost.remove());
+  if (q) q.classList.add('dragging');
+  document.body.classList.add('dragging-music');
+  if (!$('#queue').classList.contains('open')) { drag.opened = true; setTimeout(() => $('#b-queue').click()); }
+});
+document.addEventListener('dragend', () => {
+  if (!drag) return;
+  if (drag.opened && !drag.dropped) $('#q-close').click();
+  drag = null; clearDrop(); document.body.classList.remove('dragging-music');
+  $$('#queue-list .dragging').forEach((el) => el.classList.remove('dragging'));
+});
+function clearDrop() { $$('#queue-list .drop-before').forEach((el) => el.classList.remove('drop-before')); $('#queue-list').classList.remove('drop-end'); $('#queue').classList.remove('drop-over'); }
+// rang d'insertion sous le pointeur (jamais avant le titre en cours)
+function dropIndex(y) {
+  const items = $$('#queue-list .q-item').filter((el) => +el.dataset.q > player.pos);
+  const hit = items.find((el) => { const r = el.getBoundingClientRect(); return y < r.top + r.height / 2; });
+  return { at: hit ? +hit.dataset.q : player.pos + 1 + items.length, el: hit };
+}
+const qPanel = $('#queue');
+qPanel.addEventListener('dragover', (e) => {
+  if (!drag) return; e.preventDefault();
+  e.dataTransfer.dropEffect = drag.from === null ? 'copy' : 'move';
+  const { el } = dropIndex(e.clientY); clearDrop(); qPanel.classList.add('drop-over');
+  if (!player.queue.length) return;
+  if (el) el.classList.add('drop-before'); else $('#queue-list').classList.add('drop-end');
+});
+qPanel.addEventListener('dragleave', (e) => { if (!qPanel.contains(e.relatedTarget)) clearDrop(); });
+qPanel.addEventListener('drop', (e) => {
+  if (!drag) return; e.preventDefault();
+  const { at } = dropIndex(e.clientY); drag.dropped = true; clearDrop();
+  if (drag.from !== null) return player.move(drag.from, at);
+  const n = drag.ids.length; player.insert(drag.ids, at);
+  toast(n > 1 ? `${n} titres ajoutés à la file` : 'Ajouté à la file');
+});
 $('#queue-list').addEventListener('click', (e) => { const q = e.target.closest('[data-q]'); if (q) player.jump(+q.dataset.q); });
 $('#b-queue').onclick = () => { const open = $('#queue').classList.toggle('open'); $('#b-queue').classList.toggle('on'); if (open && nav.usingKeys) setTimeout(() => { nav.makeFocusable($('#queue')); nav.focusEl($('#queue .q-item.current') || $('#q-close')); }, 50); };
 $('#q-close').onclick = () => { $('#queue').classList.remove('open'); $('#b-queue').classList.remove('on'); };
