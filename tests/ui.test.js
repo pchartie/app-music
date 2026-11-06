@@ -1,21 +1,13 @@
-// Interface, dans un vrai navigateur sans fenêtre (Brave, Chrome ou Chromium déjà installé ; DISCO_BROWSER pour en imposer un).
+// Interface, dans un vrai navigateur sans fenêtre (Brave, Chrome ou Chromium déjà installé ; APPMUSIC_BROWSER pour en imposer un).
 // Ignoré si aucun navigateur n'est trouvé.
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
-import fs from 'node:fs';
 import { chromium } from 'playwright-core';
-import { startServer, sleep } from './helpers.js';
+import { startServer, sleep, findBrowser } from './helpers.js';
 
-const BROWSERS = [
-  process.env.DISCO_BROWSER,
-  '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
-  '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
-  '/Applications/Chromium.app/Contents/MacOS/Chromium',
-  '/usr/bin/brave-browser', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
-].filter(Boolean);
-const executablePath = BROWSERS.find((p) => fs.existsSync(p));
+const executablePath = findBrowser();
 
-describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trouvé (DISCO_BROWSER=…)' }, () => {
+describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trouvé (APPMUSIC_BROWSER=…)' }, () => {
   let srv, browser, page, lib;
   const errors = [], external = [];
 

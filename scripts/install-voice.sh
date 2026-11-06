@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Installe la reconnaissance vocale hors ligne (whisper.cpp + modèle « small » quantifié).
-# Tout est placé dans ~/Discotheque/tools (ignoré par Git). Usage : npm run install-voice
+# Tout est placé dans ~/AppMusic/tools (ignoré par Git). Usage : npm run install-voice
 set -e
 ROOT="${0:A:h:h}"
 TOOLS="$ROOT/tools"

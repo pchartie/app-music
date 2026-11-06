@@ -15,12 +15,24 @@ const freePort = () => new Promise((resolve, reject) => {
 });
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// withMusic: false -> premier lancement, aucun dossier choisi
-export async function startServer({ withMusic = true } = {}) {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'disco-test-'));
-  const music = withMusic ? makeLibrary(path.join(tmp, 'music')) : null;
+// Navigateur Chromium déjà installé (APPMUSIC_BROWSER pour en imposer un)
+export function findBrowser() {
+  return [
+    process.env.APPMUSIC_BROWSER,
+    '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    '/Applications/Chromium.app/Contents/MacOS/Chromium',
+    '/usr/bin/brave-browser', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+  ].filter(Boolean).find((p) => fs.existsSync(p));
+}
+
+// withMusic: false -> premier lancement, aucun dossier choisi.
+// music / cache : dossiers fournis par l'appelant (gardés à l'arrêt) ; sinon tout est temporaire.
+export async function startServer({ withMusic = true, music: givenMusic, cache: givenCache } = {}) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'app-music-test-'));
+  const music = givenMusic || (withMusic ? makeLibrary(path.join(tmp, 'music')) : null);
   const port = await freePort();
-  const env = { ...process.env, PORT: String(port), DISCO_CACHE: path.join(tmp, 'cache'), DISCO_CONFIG: path.join(tmp, 'config.json'), DISCO_OFFLINE: '1' };
+  const env = { ...process.env, PORT: String(port), APPMUSIC_CACHE: givenCache || path.join(tmp, 'cache'), APPMUSIC_CONFIG: path.join(tmp, 'config.json'), APPMUSIC_OFFLINE: '1' };
   delete env.MUSIC_DIR;
   if (music) env.MUSIC_DIR = music;
   const child = spawn(process.execPath, ['server.js'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -37,7 +49,7 @@ export async function startServer({ withMusic = true } = {}) {
   };
   try { await waitIndexed(); } catch (e) { child.kill(); fs.rmSync(tmp, { recursive: true, force: true }); throw e; }
   return {
-    url, port, tmp, music, cache: env.DISCO_CACHE, api, waitIndexed, logs: () => logs,
+    url, port, tmp, music, cache: env.APPMUSIC_CACHE, api, waitIndexed, logs: () => logs,
     async stop() { child.kill(); await new Promise((r) => (child.exitCode !== null ? r() : child.once('exit', r))); fs.rmSync(tmp, { recursive: true, force: true }); },
   };
 }

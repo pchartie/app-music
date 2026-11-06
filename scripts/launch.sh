@@ -1,5 +1,5 @@
 #!/bin/zsh
-# Démarre le serveur Discothèque s'il ne tourne pas, puis ouvre l'interface dans le navigateur par défaut.
+# Démarre le serveur App Music s'il ne tourne pas, puis ouvre l'interface dans le navigateur par défaut.
 ROOT="${0:A:h:h}"
 PORT="${PORT:-4321}"
 URL="http://localhost:$PORT"

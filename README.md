@@ -1,67 +1,87 @@
-# Discothèque
+<div align="center">
 
-Lecteur musical local pour une bibliothèque FLAC/MP3, dans l'esprit des applications Apple :
-Cover Flow en boîtiers de CD 3D, fiches artistes et albums, recherche tolérante, commande vocale,
-navigation complète au clavier ou à la télécommande. **Fonctionne entièrement hors ligne.**
+# App Music
 
-![Node](https://img.shields.io/badge/node-%E2%89%A518-green) ![macOS](https://img.shields.io/badge/macOS-oui-lightgrey)
+**Votre musique FLAC, belle comme au premier jour.**<br>
+Un lecteur local pour macOS, dans l'esprit des apps Apple : Cover Flow en boîtiers CD 3D, fiches d'artistes,
+recherche qui comprend « metal allemand des années 80 », et zéro dépendance au cloud.
+
+![Node](https://img.shields.io/badge/node-%E2%89%A518-3c873a) ![macOS](https://img.shields.io/badge/macOS-oui-lightgrey) ![Hors ligne](https://img.shields.io/badge/100%25-hors%20ligne-fa2d48) ![Tests](https://img.shields.io/badge/tests-npm%20test-4c6ef5)
+
+<img src="docs/screenshots/cover-flow.jpg" alt="Cover Flow : les albums en boîtiers CD 3D avec reflets" width="100%">
+
+</div>
+
+## Pourquoi App Music
+
+- **Vos fichiers restent intacts.** L'app lit les FLAC et MP3 là où ils sont : aucun déplacement, aucun renommage, aucune réécriture de tags.
+- **Hors ligne, pour de vrai.** Les pochettes, biographies et photos sont téléchargées une seule fois. Ensuite, plus besoin d'Internet.
+- **Pensée pour le canapé.** Tout se pilote au clavier ou à la télécommande, jusqu'à la recherche vocale (traitée sur votre Mac).
+- **Lossless d'abord.** Le format exact est affiché partout : 16 bits/44,1 kHz, 24 bits/96 kHz.
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/album.jpg" alt="Page d'un album"><br><b>Albums</b> : pochette inclinable, disque qui tourne pendant l'écoute, présentation en une phrase, titres très connus marqués ★.</td>
+    <td width="50%"><img src="docs/screenshots/artist.jpg" alt="Page d'un artiste"><br><b>Artistes</b> : photo, origine, années d'activité, biographie, titres populaires et discographie.</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/albums-queue.jpg" alt="Grille des albums et file À suivre"><br><b>À suivre</b> : glissez un titre ou un album entier dans la file, réorganisez-la, videz-la.</td>
+    <td width="50%"><img src="docs/screenshots/search.jpg" alt="Recherche « années 80 »"><br><b>Recherche</b> : fautes de frappe, sigles (« rhcp »), décennies, années, pays, genres.</td>
+  </tr>
+  <tr>
+    <td colspan="2"><img src="docs/screenshots/now-playing.jpg" alt="Lecture en plein écran"><br><b>À l'écoute</b> : plein écran, couleurs tirées de la pochette, touches multimédia du clavier.</td>
+  </tr>
+</table>
+
+<sub>Captures réalisées avec une bibliothèque de démonstration : artistes, albums et pochettes inventés (`npm run screenshots`).</sub>
 
 ## Installation
 
-Sur un Mac, ouvrir le **Terminal** (⌘ Espace, « Terminal ») et coller cette ligne :
+Sur un Mac, ouvrez le **Terminal** (⌘ Espace, « Terminal ») et collez cette ligne :
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/pchartie/discotheque/main/install.sh | zsh
+curl -fsSL https://raw.githubusercontent.com/pchartie/app-music/main/install.sh | zsh
 ```
 
-C'est tout : Node.js est téléchargé si besoin (sans droits administrateur), l'app est installée dans `~/Discotheque`
-puis s'ouvre dans le navigateur. Ensuite, double-clic sur le raccourci **Discothèque** du bureau.
-Relancer la même ligne met l'app à jour (le cache et le dossier de musique sont conservés).
+Et c'est tout. Node.js est téléchargé si besoin (sans droits administrateur), puis l'app est installée dans `~/AppMusic`
+et s'ouvre dans le navigateur. Ensuite, il suffit de double-cliquer sur le raccourci **App Music** du bureau.
+Relancer la même ligne met l'app à jour, en gardant le cache et le dossier de musique.
 
-Développement : `git clone`, puis `npm install` et `npm run app` (ou `npm start` pour le serveur au premier plan).
+Au premier lancement, un écran d'accueil demande le dossier qui contient la musique : sélecteur du Finder, chemin à saisir,
+ou dossiers détectés automatiquement. Ce dossier reste modifiable depuis la colonne de gauche (ligne « Dossier »).
+L'app crée aussi `~/Applications/App Music.app` et un raccourci sur le bureau, une seule fois :
+si vous le supprimez, il n'est pas recréé, et `npm run make-app` le refait.
 
-Au premier lancement, l'app s'installe dans `~/Applications/Discothèque.app` avec un raccourci
-« Discothèque » sur le bureau (une seule fois : supprimé, il n'est pas recréé ; `npm run make-app` le refait).
-Un écran d'accueil demande le dossier qui contient la musique (sélecteur du Finder,
-chemin à saisir, ou dossiers détectés automatiquement). Il reste modifiable depuis la colonne de gauche
-(ligne « Dossier »). Le choix est enregistré dans `config.json`, propre à chaque machine.
-
-**Comment ça tourne** : `server.js` est un petit serveur web local (127.0.0.1:4321, invisible depuis le réseau)
-qui indexe la musique et sert l'audio, les pochettes et les fiches ; l'interface est une page web. Le lanceur
-démarre le serveur en arrière-plan s'il ne tourne pas, puis ouvre l'interface dans le navigateur par défaut. `npm start` lance le serveur au premier plan.
-
-Les fichiers audio ne sont **jamais modifiés ni déplacés** : l'app ne fait que les lire.
-Tout ce qui est dérivé (pochettes redimensionnées, fiches, photos) va dans `cache/`,
-qui peut être supprimé sans risque.
+**Comment ça marche.** `server.js` est un petit serveur local (127.0.0.1:4321, invisible depuis le réseau) qui indexe la musique
+et sert l'audio, les pochettes et les fiches. L'interface est une page web ouverte dans votre navigateur par défaut.
 
 ## Hors ligne
 
 - L'interface ne lit que le cache local et ne contacte jamais Internet.
-- Le dossier de musique est surveillé : un album ajouté est indexé ~20 s après la fin de la copie,
-  puis ses infos sont rapatriées une seule fois (MusicBrainz → Wikidata → Wikipédia pour la présentation,
-  TheAudioDB pour les photos, Deezer pour le label et la popularité des titres). Sans réseau, nouvel essai toutes les 15 min.
-- `npm run sync` : indexe, télécharge ce qui manque, puis s'arrête.
-
-## Titres très connus
-
-Une étoile ★ signale les grands classiques (classement de popularité Deezer ≥ 800 000 : *Nothing Else Matters*,
-*Seven Nation Army*, *Mistral gagnant*…). Chaque page d'artiste commence par ses titres populaires.
+- Le dossier de musique est surveillé : un album ajouté est indexé environ 20 s après la fin de la copie, puis ses infos sont
+  récupérées une seule fois. Les présentations viennent de MusicBrainz, Wikidata et Wikipédia, les photos de TheAudioDB,
+  le label et la popularité des titres de Deezer. Sans réseau, un nouvel essai a lieu toutes les 15 minutes.
+- `npm run sync` indexe, télécharge ce qui manque, puis s'arrête.
+- Tout ce qui est calculé ou téléchargé (miniatures, fiches, photos) va dans `cache/`, que vous pouvez supprimer sans risque.
 
 ## Recherche
 
 Quelques mots suffisent, même approximatifs : `metalica`, `rhcp`, `acdc`, `années 80`, `80s`, `86`,
 `entre 1975 et 1980`, `metal allemand`, `groupe suédois`, `rap`, `chanson française`, `hard rock 90`.
-« joue … » / « lance … » démarre directement la lecture du meilleur résultat.
+« joue … » ou « lance … » démarre directement la lecture du meilleur résultat.
+
+Une étoile ★ signale les grands classiques, c'est-à-dire les titres classés au moins 800 000 en popularité sur Deezer
+(*Nothing Else Matters*, *Seven Nation Army*, *Mistral gagnant*…). Chaque page d'artiste commence par ses titres populaires.
 
 ## Commande vocale (locale)
 
-Reconnaissance par [whisper.cpp](https://github.com/ggml-org/whisper.cpp), sur la machine : la voix ne sort pas.
+La reconnaissance vocale utilise [whisper.cpp](https://github.com/ggml-org/whisper.cpp) et tourne entièrement sur votre Mac : votre voix n'est envoyée nulle part.
 
 ```sh
 npm run install-voice   # compile whisper.cpp et télécharge le modèle « small » (~190 Mo) dans tools/
 ```
 
-Puis bouton micro dans la recherche, ou `Ctrl+M`. Les noms d'artistes de la bibliothèque guident la reconnaissance.
+Ensuite, cliquez sur le micro dans la recherche ou appuyez sur `Ctrl+M`. Les noms des artistes de votre bibliothèque aident la reconnaissance.
 
 ## Clavier et télécommande
 
@@ -75,17 +95,40 @@ Puis bouton micro dans la recherche, ou `Ctrl+M`. Les noms d'artistes de la bibl
 | Une lettre | Commencer une recherche |
 | `Ctrl+M` | Recherche vocale |
 
-Sur le curseur de position ou de volume : ← → pour avancer de 10 s / régler le volume.
+Sur le curseur de position ou de volume, ← et → avancent de 10 s ou règlent le volume.
 
-## Organisation du code
+## Développement
+
+```sh
+git clone https://github.com/pchartie/app-music ~/AppMusic && cd ~/AppMusic
+npm install
+npm start          # serveur au premier plan (npm run app : en arrière-plan + navigateur)
+npm test           # toute la batterie de tests (~25 s)
+```
+
+**Tests.** Les tests tournent sur une bibliothèque factice générée à la volée (vrais FLAC 16/44,1 et 24/96, MP3, pochettes),
+sans jamais toucher à votre musique. Ils couvrent :
+- le serveur : indexation, regroupements, plages audio, confidentialité des chemins, mode hors ligne ;
+- la recherche ;
+- l'interface, dans Brave, Chrome ou Chromium sans fenêtre : lecture, file « À suivre », clavier, absence de ressources externes.
+
+Pour imposer un navigateur : `APPMUSIC_BROWSER=/chemin/vers/chrome`. Les captures de cette page se régénèrent avec `npm run screenshots`.
+
+**Organisation du code.**
 
 - `server.js` : indexation, audio, cache, synchronisation des métadonnées, reconnaissance vocale
-- `public/app.js` : interface (vues, Cover Flow, lecteur)
+- `public/app.js` : interface (vues, Cover Flow, lecteur, file d'attente)
 - `public/search.js` : moteur de recherche (fautes de frappe, sigles, décennies, genres, pays)
-- `public/keynav.js` : navigation spatiale au clavier / à la télécommande
+- `public/keynav.js` : navigation spatiale au clavier et à la télécommande
 - `public/voice.js` : capture du micro et détection de fin de phrase
 - `public/glass.js` : effet de verre liquide du lecteur (réfraction, dispersion)
-- `scripts/` : lanceur, création de l'app, installation de la reconnaissance vocale
+- `scripts/` : lanceur, création de l'app, reconnaissance vocale, captures d'écran
+- `tests/` : batterie de tests et générateur de bibliothèque factice
 
-Variables utiles pour tester : `PORT`, `MUSIC_DIR` (prioritaire sur `config.json`), `DISCO_CONFIG`, `DISCO_CACHE`, `DISCO_OFFLINE=1` (simule l'absence de réseau).
-La génération des miniatures utilise `sips`, fourni avec macOS.
+Variables utiles :
+- `PORT` : port du serveur ;
+- `MUSIC_DIR` : dossier de musique, prioritaire sur `config.json` ;
+- `APPMUSIC_CONFIG` et `APPMUSIC_CACHE` : emplacements de la config et du cache ;
+- `APPMUSIC_OFFLINE=1` : simule l'absence de réseau.
+
+Les miniatures sont générées avec `sips`, fourni avec macOS.

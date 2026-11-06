@@ -28,7 +28,7 @@ const BPS_CODE = { 16: 0b100, 24: 0b110 };
 export function flac({ tags = {}, seconds = 1, rate = 44100, bits = 16, picture = null }) {
   const BLOCK = 4096;
   const frames = Math.max(1, Math.round((seconds * rate) / BLOCK));
-  if (frames > 127) throw new Error('durée trop longue pour ce générateur');
+  if (frames >= 0xd800) throw new Error('durée trop longue pour ce générateur');
   const block = (type, data, last) => Buffer.concat([Buffer.from([(last ? 0x80 : 0) | type, data.length >> 16, (data.length >> 8) & 0xff, data.length & 0xff]), data]);
   // STREAMINFO
   const si = Buffer.alloc(34);
@@ -40,7 +40,7 @@ export function flac({ tags = {}, seconds = 1, rate = 44100, bits = 16, picture 
   const blocks = [block(0, si)];
   const entries = Object.entries(tags).filter(([, v]) => v != null).map(([k, v]) => Buffer.from(`${k}=${v}`));
   if (entries.length) {
-    const vendor = Buffer.from('discotheque-tests');
+    const vendor = Buffer.from('app-music-tests');
     blocks.push(block(4, Buffer.concat([u32le(vendor.length), vendor, u32le(entries.length), ...entries.flatMap((e) => [u32le(e.length), e])])));
   }
   if (picture) {
@@ -50,7 +50,8 @@ export function flac({ tags = {}, seconds = 1, rate = 44100, bits = 16, picture 
   blocks[blocks.length - 1][0] |= 0x80; // dernier bloc de métadonnées
   const out = [Buffer.from('fLaC'), ...blocks];
   for (let n = 0; n < frames; n++) {
-    const head = Buffer.from([0xff, 0xf8, (0b1100 << 4) | RATE_CODE[rate], (0b0001 << 4) | (BPS_CODE[bits] << 1), n]);
+    // numéro de trame codé « façon UTF-8 » (même schéma de bits que l'UTF-8 pour n < 0xD800)
+    const head = Buffer.concat([Buffer.from([0xff, 0xf8, (0b1100 << 4) | RATE_CODE[rate], (0b0001 << 4) | (BPS_CODE[bits] << 1)]), Buffer.from(String.fromCodePoint(n), 'utf8')]);
     const sub = Buffer.concat([Buffer.from([0]), Buffer.alloc(bits / 8), Buffer.from([0]), Buffer.alloc(bits / 8)]);
     const frame = Buffer.concat([head, Buffer.from([crc8(head)]), sub]);
     const c = crc16(frame);

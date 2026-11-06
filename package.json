@@ -1,5 +1,5 @@
 {
-  "name": "discotheque",
+  "name": "app-music",
   "version": "1.0.0",
   "description": "",
   "main": "index.js",
@@ -9,7 +9,8 @@
     "sync": "node server.js --sync",
     "install-voice": "zsh scripts/install-voice.sh",
     "app": "zsh scripts/launch.sh",
-    "make-app": "zsh scripts/make-app.sh"
+    "make-app": "zsh scripts/make-app.sh",
+    "screenshots": "node scripts/screenshots.mjs"
   },
   "keywords": [],
   "author": "",

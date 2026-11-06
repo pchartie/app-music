@@ -1,4 +1,4 @@
-# Discothèque — notes pour Claude Code
+# App Music — notes pour Claude Code
 
 Lecteur musical local (Node + page web) pour une bibliothèque FLAC/MP3 : Cover Flow en boîtiers CD 3D,
 fiches artistes/albums, recherche tolérante, commande vocale locale, navigation clavier/télécommande.
@@ -19,13 +19,13 @@ Voir README.md pour l'usage et l'organisation du code.
   par défaut (pas de fenêtre « app » dédiée).
 - Tester avant de livrer : **`npm test` doit passer** (serveur, recherche, interface dans Brave/Chrome sans fenêtre,
   sur une bibliothèque factice générée dans `tests/fixtures.js`). Toute nouvelle fonction ou correction ajoute son test.
-  Essais manuels sur instance isolée : `PORT`, `MUSIC_DIR`, `DISCO_CONFIG`, `DISCO_CACHE`, `DISCO_OFFLINE=1`.
+  Essais manuels sur instance isolée : `PORT`, `MUSIC_DIR`, `APPMUSIC_CONFIG`, `APPMUSIC_CACHE`, `APPMUSIC_OFFLINE=1`.
   Puis commit + push sur `main`.
 
 ## Sur une nouvelle machine
 
 ```sh
-git clone https://github.com/pchartie/discotheque ~/Discotheque && cd ~/Discotheque
+git clone https://github.com/pchartie/app-music ~/AppMusic && cd ~/AppMusic
 npm install && npm run app        # l'écran d'accueil demande le dossier de musique
 npm run install-voice             # optionnel : reconnaissance vocale (whisper.cpp dans tools/)
 ```

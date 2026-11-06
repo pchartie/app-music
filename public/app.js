@@ -1,4 +1,4 @@
-// Discothèque — interface
+// App Music — interface
 import { buildIndex, search as runSearch } from './search.js';
 import * as nav from './keynav.js';
 import { listen, voiceAvailable } from './voice.js';
@@ -602,7 +602,7 @@ let voiceReady = false, voiceCtl = null;
 voiceAvailable().then((ok) => { voiceReady = ok; $('#mic').classList.toggle('off', !ok); if (!ok) $('#mic').title = 'Recherche vocale : à installer (npm run install-voice)'; });
 async function startVoice() {
   if (voiceCtl) return;
-  if (!voiceReady) { toast('Recherche vocale non installée : lancez « npm run install-voice » dans ~/Discotheque'); return; }
+  if (!voiceReady) { toast('Recherche vocale non installée : lancez « npm run install-voice » dans ~/AppMusic'); return; }
   const box = $('#voice'), state = $('#voice-state'), orb = $('#voice-orb');
   box.classList.add('open'); box.classList.remove('thinking'); box.setAttribute('aria-hidden', 'false');
   state.textContent = 'Je vous écoute…'; $('#voice-hint').style.visibility = '';
@@ -977,9 +977,9 @@ function showSetup({ change = false } = {}) {
     const close = () => { box.classList.remove('open'); box.setAttribute('aria-hidden', 'true'); setTimeout(() => { box.innerHTML = ''; }, 500); done(); };
     box.innerHTML = `<div class="setup-panel">
       <div class="setup-logo">${LOGO}</div>
-      <h1>${change ? 'Dossier de musique' : 'Bienvenue dans Discothèque'}</h1>
+      <h1>${change ? 'Dossier de musique' : 'Bienvenue dans App Music'}</h1>
       <p class="setup-lead">${change ? 'Choisissez un autre dossier à lire.' : 'Pour commencer, indiquez le dossier qui contient votre musique (FLAC, MP3, M4A…).'}
-        Vos fichiers ne seront ni modifiés ni déplacés&nbsp;: Discothèque se contente de les lire.</p>
+        Vos fichiers ne seront ni modifiés ni déplacés&nbsp;: App Music se contente de les lire.</p>
       <div class="setup-step" id="setup-choose">
         <button class="btn primary setup-pick" id="setup-pick">${FOLDER} Choisir un dossier…</button>
         <div class="setup-or"><span>ou saisissez son chemin</span></div>

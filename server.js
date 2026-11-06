@@ -1,4 +1,4 @@
-// Discothèque — serveur local : indexe la musique, sert l'audio, les pochettes et les métadonnées.
+// App Music — serveur local : indexe la musique, sert l'audio, les pochettes et les métadonnées.
 import http from 'node:http';
 import fs from 'node:fs';
 import fsp from 'node:fs/promises';
@@ -13,29 +13,29 @@ import { parseFile } from 'music-metadata';
 const exec = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4321);
-const CACHE = process.env.DISCO_CACHE || path.join(ROOT, 'cache');
+const CACHE = process.env.APPMUSIC_CACHE || path.join(ROOT, 'cache');
 const COVERS = path.join(CACHE, 'covers');
 const META = path.join(CACHE, 'meta');
 const ARTIST_IMG = path.join(CACHE, 'artists');
 const LIB_FILE = path.join(CACHE, 'library.json');
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
-const UA = 'Discotheque/1.0 (application musicale locale)';
-const CONFIG_FILE = process.env.DISCO_CONFIG || path.join(ROOT, 'config.json'); // propre à chaque machine, ignoré par Git
+const UA = 'AppMusic/1.0 (application musicale locale)';
+const CONFIG_FILE = process.env.APPMUSIC_CONFIG || path.join(ROOT, 'config.json'); // propre à chaque machine, ignoré par Git
 const expandHome = (p) => (p || '').trim().replace(/^~(?=$|\/)/, os.homedir());
 const tilde = (p) => (p ? p.replace(os.homedir(), '~') : null);
 function readConfig() { try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; } }
 function writeConfig(c) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(c, null, 2)); }
 let MUSIC_DIR = process.env.MUSIC_DIR || readConfig().musicDir || null;
 
-if (process.env.DISCO_OFFLINE) globalThis.fetch = async () => { throw new TypeError('hors ligne (simulé)'); };
+if (process.env.APPMUSIC_OFFLINE) globalThis.fetch = async () => { throw new TypeError('hors ligne (simulé)'); };
 for (const d of [CACHE, COVERS, META, ARTIST_IMG]) fs.mkdirSync(d, { recursive: true });
 // Installations antérieures à l'écran d'accueil : la musique était lue dans ~/Downloads
 if (!MUSIC_DIR && fs.existsSync(LIB_FILE)) { MUSIC_DIR = path.join(os.homedir(), 'Downloads'); writeConfig({ musicDir: MUSIC_DIR }); }
 
 // Premier lancement : crée l'app dans ~/Applications et un raccourci sur le bureau, une seule fois
-// (s'il est supprimé ensuite, il n'est pas recréé). Pas pour les instances de test (DISCO_CONFIG).
+// (s'il est supprimé ensuite, il n'est pas recréé). Pas pour les instances de test (APPMUSIC_CONFIG).
 async function firstRunShortcut() {
-  if (process.platform !== 'darwin' || process.env.DISCO_CONFIG || readConfig().shortcut) return;
+  if (process.platform !== 'darwin' || process.env.APPMUSIC_CONFIG || readConfig().shortcut) return;
   try {
     const { stdout } = await exec('zsh', [path.join(ROOT, 'scripts', 'make-app.sh')]);
     writeConfig({ ...readConfig(), shortcut: true });
@@ -618,7 +618,7 @@ const WHISPER = path.join(ROOT, 'tools', 'whisper.cpp', 'build', 'bin', 'whisper
 const WHISPER_MODEL = path.join(ROOT, 'tools', 'ggml-small-q5_1.bin');
 const voiceReady = () => fs.existsSync(WHISPER) && fs.existsSync(WHISPER_MODEL);
 async function transcribe(wav) {
-  const f = path.join(os.tmpdir(), `discotheque-voix-${process.pid}-${Date.now()}.wav`);
+  const f = path.join(os.tmpdir(), `app-music-voix-${process.pid}-${Date.now()}.wav`);
   await fsp.writeFile(f, wav);
   try {
     // Des exemples de requêtes et les noms d'artistes de la bibliothèque guident la reconnaissance
@@ -746,7 +746,7 @@ if (process.argv.includes('--sync')) {
   process.exit(0);
 } else {
   server.listen(PORT, '127.0.0.1', () => {
-    console.log(`Discothèque : http://localhost:${PORT}  (musique : ${MUSIC_DIR || 'à choisir au premier lancement'})`);
+    console.log(`App Music : http://localhost:${PORT}  (musique : ${MUSIC_DIR || 'à choisir au premier lancement'})`);
     scan();
     watchMusic();
     firstRunShortcut();
