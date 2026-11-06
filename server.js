@@ -32,6 +32,17 @@ for (const d of [CACHE, COVERS, META, ARTIST_IMG]) fs.mkdirSync(d, { recursive: 
 // Installations antérieures à l'écran d'accueil : la musique était lue dans ~/Downloads
 if (!MUSIC_DIR && fs.existsSync(LIB_FILE)) { MUSIC_DIR = path.join(os.homedir(), 'Downloads'); writeConfig({ musicDir: MUSIC_DIR }); }
 
+// Premier lancement : crée l'app dans ~/Applications et un raccourci sur le bureau, une seule fois
+// (s'il est supprimé ensuite, il n'est pas recréé). Pas pour les instances de test (DISCO_CONFIG).
+async function firstRunShortcut() {
+  if (process.platform !== 'darwin' || process.env.DISCO_CONFIG || readConfig().shortcut) return;
+  try {
+    const { stdout } = await exec('zsh', [path.join(ROOT, 'scripts', 'make-app.sh')]);
+    writeConfig({ ...readConfig(), shortcut: true });
+    console.log(stdout.trim());
+  } catch (e) { console.log('Raccourci non créé :', e.message); }
+}
+
 const hash = (s) => crypto.createHash('sha1').update(s).digest('hex').slice(0, 12);
 const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').replace(/[’']/g, "'").replace(/\s+/g, ' ').trim();
 
@@ -736,5 +747,6 @@ if (process.argv.includes('--sync')) {
     console.log(`Discothèque : http://localhost:${PORT}  (musique : ${MUSIC_DIR || 'à choisir au premier lancement'})`);
     scan();
     watchMusic();
+    firstRunShortcut();
   });
 }

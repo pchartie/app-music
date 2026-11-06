@@ -13,11 +13,12 @@ Prérequis : macOS et [Node.js](https://nodejs.org) 18 ou plus.
 ```sh
 git clone https://github.com/pchartie/discotheque && cd discotheque
 npm install
-npm run make-app   # crée ~/Applications/Discothèque.app (à double-cliquer ensuite)
-npm run app        # ou lance directement
+npm run app        # lance l'app
 ```
 
-Au premier lancement, un écran d'accueil demande le dossier qui contient la musique (sélecteur du Finder,
+Au premier lancement, l'app s'installe dans `~/Applications/Discothèque.app` avec un raccourci
+« Discothèque » sur le bureau (une seule fois : supprimé, il n'est pas recréé ; `npm run make-app` le refait).
+Un écran d'accueil demande le dossier qui contient la musique (sélecteur du Finder,
 chemin à saisir, ou dossiers détectés automatiquement). Il reste modifiable depuis la colonne de gauche
 (ligne « Dossier »). Le choix est enregistré dans `config.json`, propre à chaque machine.
 
