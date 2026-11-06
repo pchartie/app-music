@@ -11,7 +11,7 @@ Voir README.md pour l'usage et l'organisation du code.
   Les corrections (regroupement d'albums, artistes) se font en mémoire dans `server.js` (`assignAlbums`). Tout le dérivé va dans `cache/`.
 - **100 % hors ligne côté interface** : les routes `/api/*` et la page ne lisent que `cache/`. Seul `syncMetadata()`
   contacte Internet (après chaque indexation, réessai toutes les 15 min, `npm run sync`). Aucune ressource externe dans la page.
-- Dépôt **public** : rien de personnel dans le code (chemins, noms, fichiers du cache).
+- Dépôt privé depuis le 2026-11-06 (il a été public et pourra le redevenir) : rien de personnel dans le code (chemins, noms, fichiers du cache).
 - Style : sobre, élégant, fluide, « façon Apple », ambiance cinéma sombre. Usage prévu au clavier/télécommande :
   toute nouvelle UI doit être navigable aux flèches (`public/keynav.js`).
 - Choix déjà tranchés par l'utilisateur : pas de verso de boîte avec la liste des titres ; Wikipédia limité à la
