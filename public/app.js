@@ -814,6 +814,7 @@ const player = {
   },
   // vide « Ensuite » en gardant le titre en cours
   clearUpcoming() { if (this.pos < 0) return; this.queue = [this.current]; this.order = [0]; this.pos = 0; this.settle(); },
+  remove(i) { if (i <= this.pos || i >= this.order.length) return; this.order.splice(i, 1); this.settle(); },
   move(from, to) { const [x] = this.order.splice(from, 1); this.order.splice(to > from ? to - 1 : to, 0, x); this.settle(); },
   settle() {
     // hors aléatoire, la file reste dans l'ordre affiché (désactiver l'aléatoire plus tard ne défait pas les ajouts)
@@ -911,7 +912,7 @@ if ('mediaSession' in navigator) {
 // File d'attente
 function renderQueue() {
   const box = $('#queue-list'); if (!player.queue.length) { $('#q-clear').hidden = true; box.innerHTML = '<div class="empty">Rien en attente.<br><small>Glissez des titres ou des albums ici.</small></div>'; return; }
-  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></div></div>`; };
+  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}" tabindex="0"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></div>${i > player.pos ? `<button class="q-remove" data-remove="${i}" title="Retirer de la file (Suppr)" aria-label="Retirer de la file"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>` : ''}</div>`; };
   const upcoming = player.order.slice(player.pos + 1, player.pos + 101).map((_, k) => item(player.pos + 1 + k)).join('');
   $('#q-clear').hidden = player.pos >= player.order.length - 1;
   const top = box.scrollTop;
@@ -969,7 +970,16 @@ qPanel.addEventListener('drop', (e) => {
   const n = drag.ids.length; player.insert(drag.ids, at);
   toast(n > 1 ? `${n} titres ajoutés à la file` : 'Ajouté à la file');
 });
-$('#queue-list').addEventListener('click', (e) => { const q = e.target.closest('[data-q]'); if (q) player.jump(+q.dataset.q); });
+$('#queue-list').addEventListener('click', (e) => {
+  const rm = e.target.closest('[data-remove]'); if (rm) { e.stopPropagation(); return removeFromQueue(+rm.dataset.remove); }
+  const q = e.target.closest('[data-q]'); if (q) player.jump(+q.dataset.q);
+});
+// retire un titre à venir ; au clavier, le focus passe au titre suivant (ou précédent en fin de file)
+function removeFromQueue(i) {
+  const hadFocus = document.activeElement?.closest?.('#queue-list');
+  player.remove(i);
+  if (hadFocus || nav.usingKeys) { const next = $(`#queue-list .q-item[data-q="${i}"]`) || $(`#queue-list .q-item[data-q="${i - 1}"]`); if (next) nav.focusEl(next); }
+}
 $('#b-queue').onclick = () => { const open = $('#queue').classList.toggle('open'); $('#b-queue').classList.toggle('on'); if (open && nav.usingKeys) setTimeout(() => { nav.makeFocusable($('#queue')); nav.focusEl($('#queue .q-item.current') || $('#q-close')); }, 50); };
 $('#q-clear').onclick = () => player.clearUpcoming();
 $('#q-close').onclick = () => { $('#queue').classList.remove('open'); $('#b-queue').classList.remove('on'); };
@@ -1022,6 +1032,9 @@ window.addEventListener('keydown', (e) => {
     if (k === 'ArrowUp' || (k === 'ArrowLeft' && e.target.selectionStart === 0 && !e.target.value)) { e.preventDefault(); nav.move(k === 'ArrowUp' ? 'up' : 'left'); }
     return;
   }
+  // Suppr (ou retour arrière) sur un titre à venir de « À suivre » : le retirer de la file
+  const qItem = document.activeElement?.closest?.('#queue-list .q-item[draggable]');
+  if (qItem && (k === 'Delete' || k === 'Backspace')) { e.preventDefault(); return removeFromQueue(+qItem.dataset.q); }
   if (k === 'Escape' || k === 'Backspace' || k === 'BrowserBack' || k === 'GoBack') { e.preventDefault(); return goBack(); }
   if (e.code === 'Space') { e.preventDefault(); return player.toggle(); }
   if (ARROWS[k]) {

@@ -109,6 +109,16 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     await page.click('#b-queue'); await sleep(500);
     assert.deepEqual(await queue(), before);
 
+    // retirer un titre : bouton × au survol (pas sur le titre en cours), puis touche Suppr au clavier
+    assert.equal(await page.$('#queue-list .q-item.current .q-remove'), null, 'le titre en cours ne se retire pas');
+    const q0 = await queue();
+    await page.hover('#queue-list .q-item[data-q="2"]'); await page.click('#queue-list .q-item[data-q="2"] .q-remove'); await sleep(300);
+    assert.deepEqual(await queue(), q0.filter((_, k) => k !== 2), 'retiré au clic');
+    const q1 = await queue();
+    await page.focus('#queue-list .q-item[data-q="1"]'); await page.keyboard.press('Delete'); await sleep(300);
+    assert.deepEqual(await queue(), q1.filter((_, k) => k !== 1), 'retiré avec Suppr');
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset?.q), '1', 'le focus passe au titre suivant');
+
     // vider : seul le titre en cours reste, et le bouton disparaît
     await page.click('#q-clear'); await sleep(300);
     assert.deepEqual(await queue(), ['Minuit pile']);
@@ -136,6 +146,16 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.equal(focused, lib.albums[1].id, 'flèche droite : carte suivante');
     await page.keyboard.press('Enter'); await sleep(900);
     assert.equal(await page.evaluate(() => location.hash), `#/album/${focused}`);
+  });
+
+  test('icône : favicon et logo partagent le même dessin, recherche lisible', async () => {
+    const icon = await srv.api('/icon.svg');
+    assert.equal(icon.status, 200);
+    assert.match(icon.body.toString(), /<svg[\s\S]*<ellipse/, 'la note de musique');
+    assert.equal(await page.getAttribute('link[rel="icon"]', 'href'), 'icon.svg');
+    assert.equal(await page.$eval('.brand-mark', (img) => [img.getAttribute('src'), img.naturalWidth > 0]).then(([src, ok]) => src === 'icon.svg' && ok), true);
+    const fs = await page.$eval('#search', (e) => parseFloat(getComputedStyle(e).fontSize));
+    assert.ok(fs >= 14, `taille du texte de recherche : ${fs}px`);
   });
 
   test('Sélections : récemment ajoutés, playlist par décennie, lecture en un clic', async () => {

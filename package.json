@@ -10,7 +10,8 @@
     "install-voice": "zsh scripts/install-voice.sh",
     "app": "zsh scripts/launch.sh",
     "make-app": "zsh scripts/make-app.sh",
-    "screenshots": "node scripts/screenshots.mjs"
+    "screenshots": "node scripts/screenshots.mjs",
+    "make-icon": "node scripts/make-icon.mjs"
   },
   "keywords": [],
   "author": "",

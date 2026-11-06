@@ -131,6 +131,7 @@ sans jamais toucher à votre musique. Ils couvrent :
 - l'interface, dans Brave, Chrome ou Chromium sans fenêtre : lecture, file « À suivre », clavier, absence de ressources externes.
 
 Pour imposer un navigateur : `APPMUSIC_BROWSER=/chemin/vers/chrome`. Les captures de cette page se régénèrent avec `npm run screenshots`.
+L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icône macOS avec `npm run make-icon` (`assets/AppIcon.icns`, installée par `npm run make-app`).
 
 **Organisation du code.**
 
