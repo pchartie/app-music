@@ -343,7 +343,7 @@ function viewAlbum(id) {
   const others = ar ? ar.albums.filter((x) => x !== id).map((x) => A.get(x)) : [];
   view.innerHTML = `
     <div class="album-hero">
-      <div class="hero-cover tilt-host"><div class="hero-disc ${player.current && T.get(player.current)?.albumId === a.id ? 'playing' : ''}" data-album="${a.id}" data-disc><div class="disc" style="--art:url('${cover(a.id)}')"></div></div><div class="tilt"><img data-fade src="${cover(a.id)}" alt=""><div class="glare"></div></div></div>
+      <div class="hero-cover tilt-host" draggable="true"><div class="hero-disc ${player.current && T.get(player.current)?.albumId === a.id ? 'playing' : ''}" data-album="${a.id}" data-disc><div class="disc" style="--art:url('${cover(a.id)}')"></div></div><div class="tilt"><img data-fade src="${cover(a.id)}" alt=""><div class="glare"></div></div></div>
       <div class="hero-info">
         <div class="eyebrow">Album</div>
         <h1>${esc(a.title)}</h1>
@@ -714,6 +714,8 @@ const player = {
     const base = this.queue.length; this.queue.push(...ids);
     this.order.splice(at, 0, ...ids.map((_, k) => base + k)); this.settle();
   },
+  // vide « Ensuite » en gardant le titre en cours
+  clearUpcoming() { if (this.pos < 0) return; this.queue = [this.current]; this.order = [0]; this.pos = 0; this.settle(); },
   move(from, to) { const [x] = this.order.splice(from, 1); this.order.splice(to > from ? to - 1 : to, 0, x); this.settle(); },
   settle() {
     // hors aléatoire, la file reste dans l'ordre affiché (désactiver l'aléatoire plus tard ne défait pas les ajouts)
@@ -810,9 +812,10 @@ if ('mediaSession' in navigator) {
 
 // File d'attente
 function renderQueue() {
-  const box = $('#queue-list'); if (!player.queue.length) { box.innerHTML = '<div class="empty">Rien en attente.<br><small>Glissez des titres ou des albums ici.</small></div>'; return; }
+  const box = $('#queue-list'); if (!player.queue.length) { $('#q-clear').hidden = true; box.innerHTML = '<div class="empty">Rien en attente.<br><small>Glissez des titres ou des albums ici.</small></div>'; return; }
   const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></div></div>`; };
   const upcoming = player.order.slice(player.pos + 1, player.pos + 101).map((_, k) => item(player.pos + 1 + k)).join('');
+  $('#q-clear').hidden = player.pos >= player.order.length - 1;
   const top = box.scrollTop;
   box.innerHTML = `<div class="q-label">En cours</div>${item(player.pos)}<div class="q-label">Ensuite${player.shuffle ? ' · aléatoire' : ''}</div>${upcoming || '<div class="empty" style="padding:20px">Fin de la file</div>'}`;
   box.scrollTop = top;
@@ -823,7 +826,7 @@ let drag = null;
 document.addEventListener('dragstart', (e) => {
   const q = e.target.closest?.('#queue-list .q-item[draggable]');
   const tr = !q && e.target.closest?.('tr[data-track]');
-  const card = !q && !tr && e.target.closest?.('[data-album]:not([data-disc])');
+  const card = !q && !tr && (e.target.closest?.('[data-album]') || e.target.closest?.('.hero-cover')?.querySelector('[data-album]'));
   if (!q && !tr && !card) return;
   const ids = q ? [player.queue[player.order[+q.dataset.q]]] : tr ? [tr.dataset.track] : A.get(card.dataset.album)?.tracks || [];
   if (!ids.length) return;
@@ -870,6 +873,7 @@ qPanel.addEventListener('drop', (e) => {
 });
 $('#queue-list').addEventListener('click', (e) => { const q = e.target.closest('[data-q]'); if (q) player.jump(+q.dataset.q); });
 $('#b-queue').onclick = () => { const open = $('#queue').classList.toggle('open'); $('#b-queue').classList.toggle('on'); if (open && nav.usingKeys) setTimeout(() => { nav.makeFocusable($('#queue')); nav.focusEl($('#queue .q-item.current') || $('#q-close')); }, 50); };
+$('#q-clear').onclick = () => player.clearUpcoming();
 $('#q-close').onclick = () => { $('#queue').classList.remove('open'); $('#b-queue').classList.remove('on'); };
 
 // Plein écran « À l'écoute »
