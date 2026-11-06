@@ -44,7 +44,7 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
   const queueItem = async (i) => { const r = await (await page.$$('#queue-list .q-item'))[i].boundingBox(); return [r.x + 80, r.y + 4]; };
 
   test('toutes les pages s’affichent sans erreur', async () => {
-    const pages = [['#/flow', '#view'], ['#/albums', '.card[data-album]'], ['#/artists', '[data-artist]'], ['#/tracks', 'tr[data-track]'],
+    const pages = [['#/flow', '#view'], ['#/albums', '.card[data-album]'], ['#/artists', '[data-artist]'], ['#/selections', '.mix-card'], ['#/selection/annees-2000', '.tracklist tr[data-track]'],
       [`#/album/${album('Aurora').id}`, '.tracklist tr[data-track]'], [`#/artist/${album('Nuit Blanche').artistId}`, '[data-album]'], ['#/search/aurora', '[data-album]']];
     for (const [hash, sel] of pages) await go(hash, sel);
     assert.deepEqual(errors, []);
@@ -136,6 +136,36 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.equal(focused, lib.albums[1].id, 'flèche droite : carte suivante');
     await page.keyboard.press('Enter'); await sleep(900);
     assert.equal(await page.evaluate(() => location.hash), `#/album/${focused}`);
+  });
+
+  test('Sélections : récemment ajoutés, playlist par décennie, lecture en un clic', async () => {
+    await page.goto(srv.url + '/?sel#/tracks'); await page.waitForSelector('.selections'); await sleep(400);
+    assert.equal(await page.evaluate(() => location.hash), '#/tracks', 'l’ancienne adresse « Titres » mène aux Sélections');
+    assert.equal((await page.textContent('nav a[data-nav="selections"]')).trim(), 'Sélections');
+    assert.equal(await page.$('table.songs'), null, 'plus de grand tableau');
+    assert.equal(await page.$$eval('.selections .shelf .card[data-album]', (e) => e.length), lib.albums.length, 'récemment ajoutés');
+    // bibliothèque factice : seule la décennie 2000 a 2 albums (Café Serré 2003, Aurora 2009) ; trop petite pour un style ou des classiques
+    assert.deepEqual(await page.$$eval('.mix-card .mix-name', (e) => e.map((x) => x.textContent.trim())), ['Années 2000']);
+    assert.equal(await page.textContent('.mix-card .card-sub'), '7 titres · 0 min');
+    await page.click('.mix-card'); await page.waitForSelector('.mix-page'); await sleep(300);
+    assert.equal(await page.evaluate(() => location.hash), '#/selection/annees-2000');
+    assert.equal(await page.textContent('.mix-page h1'), 'Années 2000');
+    const rows = await page.$$eval('.tracklist tr[data-track]', (e) => e.map((x) => [x.querySelector('.tt').textContent, x.querySelector('.ta').textContent]));
+    assert.equal(rows.length, 7);
+    assert.deepEqual(rows[0], ['Expresso', 'Moka & Bisou · Café Serré'], 'ordre chronologique, artiste · album');
+    assert.equal(await page.$$eval('.tracklist .disc-head', (e) => e.length), 0, 'pas d’en-têtes de disque');
+    await page.click('.hero-actions [data-act="play"]');
+    await page.waitForFunction(() => document.querySelector('#p-title').textContent === 'Expresso');
+    await page.click('#b-play');
+    // un clic sur le bouton lecture d'une carte lance la playlist en aléatoire
+    await go('#/selections', '.mix-card'); await page.hover('.mix-card .mix-art'); await page.click('.mix-card [data-play-mix]'); await sleep(400);
+    assert.equal(await page.evaluate(() => location.hash), '#/selections', 'reste sur la page');
+    const titles = ['Expresso', 'Allongé', 'Noisette', 'Polar Night', 'Solar Wind', 'Magnetic Field', 'Dawn Chorus'];
+    assert.ok(titles.includes(await page.textContent('#p-title')));
+    assert.equal(await page.$eval('#b-shuffle', (e) => e.classList.contains('on')), true, 'aléatoire activé');
+    await page.click('#b-shuffle'); await page.click('#b-play');
+    // clavier : la carte est atteignable aux flèches
+    assert.ok(await page.$eval('.mix-card', (e) => e.tabIndex === 0), 'carte focalisable');
   });
 
   test('albums MP3 : triangle discret, lien dans « Ma bibliothèque », page et liste à télécharger', async () => {

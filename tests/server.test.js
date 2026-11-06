@@ -183,6 +183,27 @@ test('journal : date de repérage conservée, historique après remplacement par
   await rescan();
 });
 
+test('récemment ajoutés : date d’ajout de chaque album, conservée, et datée à la découverte pour un nouvel album', async () => {
+  assert.ok(lib.albums.every((a) => /^\d{4}-\d\d-\d\dT/.test(a.added)), 'chaque album a une date d’ajout');
+  assert.ok(lib.albums.every((a) => a.born === undefined), 'champ interne non exposé');
+  const before = Object.fromEntries(lib.albums.map((a) => [a.id, a.added]));
+  const t0 = new Date().toISOString();
+  const dir = path.join(srv.music, 'Tout Neuf - Arrivage');
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, '01 - Nouveau.flac'), flac({ tags: { TITLE: 'Nouveau', ARTIST: 'Tout Neuf', ALBUM: 'Arrivage', TRACKNUMBER: 1 } }));
+  await srv.api('/api/rescan', { method: 'POST' });
+  await srv.waitIndexed(EXPECTED.albums + 1);
+  const now = (await srv.api('/api/library')).body;
+  const fresh = now.albums.find((a) => a.title === 'Arrivage');
+  assert.ok(fresh.added >= t0, 'daté au moment où l’app le découvre');
+  for (const a of now.albums) if (before[a.id]) assert.equal(a.added, before[a.id], `${a.title} garde sa date`);
+  assert.ok(JSON.parse(fs.readFileSync(path.join(srv.cache, 'added.json'), 'utf8'))[fresh.id]);
+  fs.rmSync(dir, { recursive: true });
+  await srv.api('/api/rescan', { method: 'POST' });
+  for (let i = 0; i < 100; i++) { const l = (await srv.api('/api/library')).body; if (!l.albums.some((a) => a.title === 'Arrivage') && !l.scanning) break; await new Promise((r) => setTimeout(r, 50)); }
+  lib = (await srv.api('/api/library')).body;
+});
+
 test('règle absolue : les fichiers de musique ne sont jamais modifiés, déplacés ni ajoutés', () => {
   assert.deepEqual(fingerprint(srv.music), printBefore);
   assert.ok(fs.existsSync(path.join(srv.cache, 'library.json')), 'le dérivé va dans le cache');

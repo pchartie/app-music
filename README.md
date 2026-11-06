@@ -29,7 +29,8 @@ recherche qui comprend « metal allemand des années 80 », et zéro dépendance
     <td width="50%"><img src="docs/screenshots/search.jpg" alt="Recherche « années 80 »"><br><b>Recherche</b> : fautes de frappe, sigles (« rhcp »), décennies, années, pays, genres.</td>
   </tr>
   <tr>
-    <td colspan="2"><img src="docs/screenshots/now-playing.jpg" alt="Lecture en plein écran"><br><b>À l'écoute</b> : plein écran, couleurs tirées de la pochette, touches multimédia du clavier.</td>
+    <td width="50%"><img src="docs/screenshots/selections.jpg" alt="Sélections : classiques, récemment ajoutés, playlists"><br><b>Sélections</b> : les classiques ★, les albums récemment ajoutés, des playlists toutes prêtes par style et par décennie.</td>
+    <td width="50%"><img src="docs/screenshots/now-playing.jpg" alt="Lecture en plein écran"><br><b>À l'écoute</b> : plein écran, couleurs tirées de la pochette, touches multimédia du clavier.</td>
   </tr>
 </table>
 
@@ -72,6 +73,16 @@ Quelques mots suffisent, même approximatifs : `metalica`, `rhcp`, `acdc`, `ann�
 
 Une étoile ★ signale les grands classiques, c'est-à-dire les titres classés au moins 800 000 en popularité sur Deezer
 (*Nothing Else Matters*, *Seven Nation Army*, *Mistral gagnant*…). Chaque page d'artiste commence par ses titres populaires.
+
+## Sélections
+
+La page **Sélections** réunit des playlists toutes prêtes, calculées à partir de votre bibliothèque :
+- **Les classiques ★** : vos titres très connus, du plus célèbre au moins célèbre ;
+- **Récemment ajoutés** : les derniers albums arrivés dans le dossier de musique ;
+- **par style** (rock, metal, pop, rap, chanson française, classique…) : un style apparaît dès qu'il compte 2 albums et 20 titres ;
+- **par décennie** (années 70, 80, 90…), dans l'ordre chronologique.
+
+Le bouton ▶ d'une carte lance la playlist en aléatoire. Un clic sur la carte ouvre la liste des titres.
 
 ## Albums en MP3
 
@@ -126,6 +137,7 @@ Pour imposer un navigateur : `APPMUSIC_BROWSER=/chemin/vers/chrome`. Les capture
 - `server.js` : indexation, audio, cache, synchronisation des métadonnées, reconnaissance vocale
 - `public/app.js` : interface (vues, Cover Flow, lecteur, file d'attente)
 - `public/search.js` : moteur de recherche (fautes de frappe, sigles, décennies, genres, pays)
+- `public/mixes.js` : sélections (classiques, playlists par style et par décennie)
 - `public/keynav.js` : navigation spatiale au clavier et à la télécommande
 - `public/voice.js` : capture du micro et détection de fin de phrase
 - `public/glass.js` : effet de verre liquide du lecteur (réfraction, dispersion)

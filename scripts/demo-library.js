@@ -5,7 +5,7 @@ export const ARTISTS = [
   { name: 'Lumière Noire', type: 'Groupe', country: 'France', beginArea: 'Paris', begin: '1981', tags: ['synth-pop', 'new wave', 'cold wave'],
     bio: 'Lumière Noire est un groupe français de synth-pop formé à Paris en 1981, figure de la scène new wave des néons et des nuits blanches.',
     palette: ['#ff2e63', '#7b2ff7', '#08081a'], hits: { 'Néons sur la Seine': 912000, 'Minuit électrique': 846000 } },
-  { name: 'The Velvet Harbor', type: 'Groupe', country: 'United Kingdom', beginArea: 'Bristol', begin: '1988', tags: ['dream pop', 'shoegaze'],
+  { name: 'The Velvet Harbor', type: 'Groupe', country: 'United Kingdom', beginArea: 'Bristol', begin: '1988', tags: ['dream pop', 'indie rock', 'shoegaze'],
     bio: 'The Velvet Harbor est un groupe britannique de dream pop originaire de Bristol, connu pour ses guitares en apesanteur.',
     palette: ['#5ee7df', '#3b5bdb', '#0b1e3a'], hits: { 'Tidal Hours': 801000 } },
   { name: 'Sofía Marín', type: 'Artiste', country: 'Spain', beginArea: 'Séville', begin: '2006', tags: ['folk', 'jazz vocal'],

@@ -2,7 +2,7 @@
 // Les flèches déplacent le focus vers l'élément le plus proche dans la direction choisie,
 // d'abord dans la zone courante (barre latérale, contenu, lecteur), puis dans les zones voisines.
 
-const ITEM = '[data-album]:not([data-disc]), [data-artist], tr[data-track], .q-item, [data-q], [data-chip]';
+const ITEM = '[data-album]:not([data-disc]), [data-artist], [data-mix], tr[data-track], .q-item, [data-q], [data-chip]';
 const SEL = `a[href], button:not([disabled]), input:not([type=range]), [tabindex="0"], ${ITEM}`;
 const ZONES = ['.sidebar', '#view', '.player'];
 const OVERLAYS = ['#setup.open', '#voice.open', '#reader.open', '#queue.open', '#np.open'];

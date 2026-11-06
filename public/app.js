@@ -3,6 +3,7 @@ import { buildIndex, search as runSearch } from './search.js';
 import * as nav from './keynav.js';
 import { listen, voiceAvailable } from './voice.js';
 import { liquidGlass } from './glass.js';
+import { buildMixes, byArtistYear } from './mixes.js';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -128,15 +129,16 @@ let currentHash = location.hash;
 let arriving = null; // album ouvert depuis le Cover Flow (transition animée)
 function route() {
   const h = location.hash.replace(/^#\/?/, '') || store.get('lastView', 'flow');
-  const [name, arg] = h.split('/');
+  let [name, arg] = h.split('/');
+  if (name === 'tracks') name = 'selections'; // ancienne page « Titres »
   if (cleanup) { cleanup(); cleanup = null; }
-  $$('nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === name || (name === 'album' && a.dataset.nav === 'albums') || (name === 'artist' && a.dataset.nav === 'artists')));
+  $$('nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === name || (name === 'album' && a.dataset.nav === 'albums') || (name === 'artist' && a.dataset.nav === 'artists') || (name === 'selection' && a.dataset.nav === 'selections')));
   document.body.classList.toggle('flow-mode', name === 'flow' || !name);
   document.body.classList.toggle('tinted', name === 'album');
   view.classList.remove('view-enter'); void view.offsetWidth; view.classList.add('view-enter');
   view.scrollTop = 0;
-  if (['flow', 'albums', 'artists', 'tracks'].includes(name)) store.set('lastView', name);
-  ({ flow: viewFlow, albums: viewAlbums, album: viewAlbum, artists: viewArtists, artist: viewArtist, tracks: viewTracks, search: viewSearch, mp3: viewLossy }[name] || viewFlow)(arg && decodeURIComponent(arg));
+  if (['flow', 'albums', 'artists', 'selections'].includes(name)) store.set('lastView', name);
+  ({ flow: viewFlow, albums: viewAlbums, album: viewAlbum, artists: viewArtists, artist: viewArtist, selections: viewSelections, selection: viewSelection, search: viewSearch, mp3: viewLossy }[name] || viewFlow)(arg && decodeURIComponent(arg));
   nav.makeFocusable(view);
   if (name !== 'search' || document.activeElement !== $('#search')) nav.restore(location.hash);
   currentHash = location.hash;
@@ -310,6 +312,64 @@ function viewFlow(startId) {
   cleanup = () => { window.removeEventListener('keydown', onKey, true); ro.disconnect(); cancelAnimationFrame(raf); };
 }
 
+// ---------- Sélections : classiques, récemment ajoutés, playlists par style et par décennie ----------
+let mixCache = null;
+function mixes() {
+  if (mixCache?.lib !== LIB) mixCache = { lib: LIB, map: buildMixes(LIB) };
+  return mixCache.map;
+}
+const mosaicAlbums = (m, n = 4) => m.cover.slice(0, n);
+// mosaïque de pochettes (une seule s'il n'y a pas de quoi remplir la grille)
+const mosaic = (m, n = 4) => { const list = mosaicAlbums(m, n); const k = list.length >= n ? n : 1;
+  return `<div class="mosaic n${k}">${list.slice(0, k).map((a) => `<img loading="lazy" src="${cover(a.id)}" alt="">`).join('')}</div>`; };
+const mixDuration = (m) => fmtLong(m.ids.reduce((s, id) => s + (T.get(id)?.duration || 0), 0));
+const mixCard = (m) => `<div class="mix-card" data-mix="${m.key}">
+    <div class="mix-art">${mosaic(m)}<div class="mix-shade"></div><div class="mix-name">${esc(m.title)}${m.kind === 'classics' ? ' <span class="mix-star">★</span>' : ''}</div>
+      <button class="card-play" data-play-mix="${m.key}" title="Lecture aléatoire">${ICON.play}</button></div>
+    <div class="card-sub">${m.ids.length} titres · ${mixDuration(m)}</div></div>`;
+
+function viewSelections() {
+  const all = [...mixes().values()];
+  const classics = all.find((m) => m.kind === 'classics');
+  const recent = [...LIB.albums].filter((a) => a.added).sort((a, b) => b.added.localeCompare(a.added) || byArtistYear(a, b)).slice(0, 14);
+  const styles = all.filter((m) => m.kind === 'style').sort((a, b) => b.ids.length - a.ids.length);
+  const decades = all.filter((m) => m.kind === 'decade');
+  view.innerHTML = `<div class="page selections">
+    <div class="page-head"><h1>Sélections</h1></div>
+    ${classics ? `<div class="mix-hero" data-mix="classiques">${mosaic(classics, 6)}<div class="mix-hero-shade"></div>
+      <div class="mix-hero-info"><div class="eyebrow">Sélection</div><h2>Les classiques <span class="mix-star">★</span></h2>
+        <p>${classics.ids.length} grands titres de votre bibliothèque · ${mixDuration(classics)}</p>
+        <div class="hero-actions"><button class="btn primary" data-play-mix="classiques" data-autofocus>${ICON.shuffle} Lecture aléatoire</button></div></div></div>` : ''}
+    ${recent.length ? `<h2>Récemment ajoutés</h2><div class="shelf">${recent.map(albumCard).join('')}</div>` : ''}
+    ${styles.length ? `<h2>Par style</h2><div class="mix-grid">${styles.map(mixCard).join('')}</div>` : ''}
+    ${decades.length ? `<h2>Par décennie</h2><div class="mix-grid">${decades.map(mixCard).join('')}</div>` : ''}
+  </div>`;
+  onImgLoad(view);
+}
+
+function viewSelection(key) {
+  const m = mixes().get(key); if (!m) return viewSelections();
+  const first = mosaicAlbums(m, 1)[0];
+  view.innerHTML = `
+    <div class="album-hero mix-page">
+      <div class="mix-cover">${mosaic(m)}</div>
+      <div class="hero-info">
+        <div class="eyebrow">Sélection</div>
+        <h1>${esc(m.title)}${m.kind === 'classics' ? ' <span class="mix-star">★</span>' : ''}</h1>
+        <p class="hero-note on">${esc(m.note)}</p>
+        <div class="hero-facts">${m.ids.length} titres · ${m.albums.length} album${m.albums.length > 1 ? 's' : ''} · ${mixDuration(m)}</div>
+        <div class="hero-actions"><button class="btn primary" data-act="play" data-autofocus>${ICON.play} Lecture</button><button class="btn soft" data-act="shuffle">${ICON.shuffle} Aléatoire</button></div>
+      </div>
+    </div>
+    <div class="album-body"><table class="tracklist"><tbody>${trackRows(m.ids.slice(0, 600), { showArtist: true, showAlbum: true, rank: true, discs: false })}</tbody></table></div>`;
+  if (first) setAmbient(first.id);
+  $('.hero-actions', view).addEventListener('click', (e) => {
+    const act = e.target.closest('[data-act]')?.dataset.act;
+    if (act === 'play') player.playList(m.ids, 0, { shuffle: false });
+    if (act === 'shuffle') player.playList(m.ids, -1, { shuffle: true });
+  });
+}
+
 // ---------- Albums avec perte (MP3…) : journal et liste à télécharger ----------
 const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
 function viewLossy() {
@@ -359,15 +419,15 @@ function viewAlbums() {
 const STAR = '<span class="hit" title="Titre très connu">★</span>';
 // titre affiché sans les mentions techniques (« - Remastered 2021 », « (Remaster) »)
 const showTitle = (t) => t.replace(/\s*[-–]\s*(\d{4}\s*)?(remaster(ed)?|digital remaster|mono|stereo)(\s+(version|\d{4}))*\s*$/i, '').replace(/\s*[(\[](\d{4}\s*)?(remaster(ed)?|digitally remastered|remastered \d{4}|\d{4} remaster(ed)?)[^)\]]*[)\]]/i, '').trim() || t;
-function trackRows(ids, { showArtist, albumArtist, showAlbum, rank } = {}) {
-  let disc = null; const multi = new Set(ids.map((id) => T.get(id).disc)).size > 1;
+function trackRows(ids, { showArtist, albumArtist, showAlbum, rank, discs = true } = {}) {
+  let disc = null; const multi = discs && new Set(ids.map((id) => T.get(id).disc)).size > 1;
   return ids.map((id, n) => {
     const t = T.get(id); let head = '';
     if (multi && t.disc !== disc) { disc = t.disc; head = `<tr class="disc-head"><td colspan="3">Disque ${disc}</td></tr>`; }
     const feat = showArtist || (albumArtist && t.artist !== albumArtist);
     return `${head}<tr class="tr ${player.current === id ? 'playing' : ''}" data-track="${id}" data-n="${n}" draggable="true">
       <td><span class="num">${rank ? n + 1 : t.trackNo || n + 1}</span><span class="num-play">${ICON.play}</span>${ICON.eq}</td>
-      <td><div class="tt">${esc(showTitle(t.title))}${t.hit ? STAR : ''}</div>${showAlbum ? `<div class="ta">${esc(t.album)}</div>` : feat ? `<div class="ta">${esc(t.artist)}</div>` : ''}</td>
+      <td><div class="tt">${esc(showTitle(t.title))}${t.hit ? STAR : ''}</div>${showAlbum && showArtist ? `<div class="ta">${esc(t.artist)} · ${esc(t.album)}</div>` : showAlbum ? `<div class="ta">${esc(t.album)}</div>` : feat ? `<div class="ta">${esc(t.artist)}</div>` : ''}</td>
       <td>${fmtTime(t.duration)}</td></tr>`;
   }).join('');
 }
@@ -701,6 +761,9 @@ function openFromCard(card) {
 // ---------- Clics globaux dans les vues ----------
 view.addEventListener('click', (e) => {
   const chip = e.target.closest('[data-chip]'); if (chip) { setSearch(chip.dataset.chip); return; }
+  const mixPlay = e.target.closest('[data-play-mix]');
+  if (mixPlay) { e.stopPropagation(); const m = mixes().get(mixPlay.dataset.playMix); if (m) player.playList(m.ids, -1, { shuffle: true }); return; }
+  const mixCard = e.target.closest('[data-mix]'); if (mixCard) { location.hash = `#/selection/${mixCard.dataset.mix}`; return; }
   const playBtn = e.target.closest('[data-play-album]');
   if (playBtn) { e.stopPropagation(); player.playList(A.get(playBtn.dataset.playAlbum).tracks, 0); return; }
   const card = e.target.closest('[data-album]:not([data-disc])'); if (card) { openFromCard(card); return; }

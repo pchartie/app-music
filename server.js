@@ -19,6 +19,7 @@ const META = path.join(CACHE, 'meta');
 const ARTIST_IMG = path.join(CACHE, 'artists');
 const LIB_FILE = path.join(CACHE, 'library.json');
 const LOSSY_LOG = path.join(CACHE, 'lossy-log.json'); // journal des albums avec perte (MP3…)
+const ADDED_LOG = path.join(CACHE, 'added.json'); // date d'ajout de chaque album (« Récemment ajoutés »)
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
 const UA = 'AppMusic/1.0 (application musicale locale)';
 const CONFIG_FILE = process.env.APPMUSIC_CONFIG || path.join(ROOT, 'config.json'); // propre à chaque machine, ignoré par Git
@@ -167,6 +168,8 @@ async function scan() {
     a.lossyCodec = lossy.length ? [...new Set(lossy.map(codecName))].join(', ') : null;
     a.discs = new Set(a.tracks.map((id) => byId.get(id).disc)).size;
     a.hasCover = await ensureCover(a, pictures.get(a.id));
+    // date de création du dossier sur ce disque (sert seulement à dater les albums déjà là au premier passage)
+    a.born = Math.min(...[...a.dirs].map((d) => { try { const st = fs.statSync(d); return st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs; } catch { return Date.now(); } }));
     a.dirs = undefined;
   }
 
@@ -191,6 +194,7 @@ async function scan() {
   };
   await fsp.writeFile(LIB_FILE, JSON.stringify(library));
   await updateLossyLog().catch((e) => console.warn('Journal MP3 :', e.message));
+  await updateAddedLog().catch((e) => console.warn('Journal des ajouts :', e.message));
   scanning = false;
   hitIndex = null;
   if (rescanAfter) { rescanAfter = false; setTimeout(scan, 100); }
@@ -224,6 +228,22 @@ async function updateLossyLog() {
   }
   for (const [id, e] of Object.entries(log)) if (!current.has(id) && !e.resolvedAt) e.resolvedAt = now;
   await fsp.writeFile(LOSSY_LOG, JSON.stringify(log, null, 1));
+}
+// Date d'ajout : au tout premier passage, celle du dossier ; ensuite, le moment où l'app découvre l'album
+// (un album recopié depuis une vieille sauvegarde garde sa date de dossier, mais il est bien « récent » ici).
+async function updateAddedLog() {
+  let log = null;
+  try { log = JSON.parse(await fsp.readFile(ADDED_LOG, 'utf8')); } catch {}
+  const seeding = !log; log ||= {};
+  const now = new Date().toISOString();
+  let changed = seeding;
+  for (const a of library.albums) {
+    if (!log[a.id]) { log[a.id] = seeding ? new Date(a.born).toISOString() : now; changed = true; }
+    a.added = log[a.id];
+    delete a.born;
+  }
+  if (changed) await fsp.writeFile(ADDED_LOG, JSON.stringify(log));
+  await fsp.writeFile(LIB_FILE, JSON.stringify(library));
 }
 const csvCell = (v) => { const s = v == null ? '' : String(v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 function lossyCsv() {
