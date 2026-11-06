@@ -6,7 +6,7 @@
 # - télécharge Node.js dans ~/.local/node s'il n'est pas déjà présent (version 18 ou plus) ;
 # - télécharge l'app dans ~/AppMusic (une mise à jour garde le cache et le réglage du dossier de musique) ;
 # - installe les dépendances, puis lance l'app : l'écran d'accueil demande le dossier de musique,
-#   et un raccourci « App Music » est ajouté sur le bureau.
+#   et « App Music » est ajoutée sur le bureau.
 
 main() {
   set -e

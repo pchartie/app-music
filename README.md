@@ -45,12 +45,12 @@ curl -fsSL https://raw.githubusercontent.com/pchartie/app-music/main/install.sh 
 ```
 
 Et c'est tout. Node.js est téléchargé si besoin (sans droits administrateur), puis l'app est installée dans `~/AppMusic`
-et s'ouvre dans le navigateur. Ensuite, il suffit de double-cliquer sur le raccourci **App Music** du bureau.
+et s'ouvre dans le navigateur. Ensuite, il suffit de double-cliquer sur **App Music** sur le bureau.
 Relancer la même ligne met l'app à jour, en gardant le cache et le dossier de musique.
 
 Au premier lancement, un écran d'accueil demande le dossier qui contient la musique : sélecteur du Finder, chemin à saisir,
 ou dossiers détectés automatiquement. Ce dossier reste modifiable depuis la colonne de gauche (ligne « Dossier »).
-L'app crée aussi `~/Applications/App Music.app` et un raccourci sur le bureau, une seule fois :
+L'app crée aussi `~/Applications/App Music.app` et une copie sur le bureau, une seule fois :
 si vous le supprimez, il n'est pas recréé, et `npm run make-app` le refait.
 
 **Comment ça marche.** `server.js` est un petit serveur local (127.0.0.1:4321, invisible depuis le réseau) qui indexe la musique

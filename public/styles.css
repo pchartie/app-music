@@ -78,8 +78,8 @@ nav a:hover .nav-ic { transform: scale(1.06); }
 .lib-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 12px 10px; }
 .lib-stats b { display: block; font: 600 21px/1.1 -apple-system, "SF Pro Display", sans-serif; color: #fff; letter-spacing: -.01em; font-variant-numeric: tabular-nums; }
 .lib-stats span { font-size: 12px; color: var(--text-2); }
-.lib-meta { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .07); font-size: 12px; color: var(--text-3); display: grid; gap: 3px; }
-.lib-meta div { display: flex; justify-content: space-between; gap: 8px; }
+.lib-meta { margin-top: 12px; padding-top: 10px; border-top: 1px solid rgba(255, 255, 255, .07); font-size: 13px; color: var(--text-3); display: grid; gap: 3px; }
+.lib-meta div { display: flex; justify-content: space-between; gap: 8px; line-height: 1.45; }
 .lib-meta div span:last-child { color: var(--text-2); }
 .link-btn { color: var(--accent); font-size: 12px; text-align: left; }
 .link-btn:hover { text-decoration: underline; }
@@ -349,6 +349,7 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .queue.open { transform: none; }
 .queue-head { display: flex; justify-content: space-between; align-items: center; padding: 16px 18px 8px; }
 .queue-head h3 { margin: 0; font-size: 17px; }
+.queue-head .link-btn { font-size: 14px; font-weight: 500; }
 .q-actions { display: flex; gap: 14px; }
 .q-actions [hidden] { display: none; }
 #q-clear { color: var(--text-2); }
@@ -620,7 +621,7 @@ body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p
 .badge.warn { color: var(--warn); border-color: rgba(255, 179, 64, .35); }
 .badge.warn svg { width: 10px; height: 10px; }
 .lossy-link { display: inline-flex; align-items: center; gap: 5px; color: var(--warn); }
-.lossy-link svg { width: 11px; height: 11px; }
+.lossy-link svg { width: 12px; height: 12px; }
 .lossy-link:hover { text-decoration: underline; }
 .lossy-intro { color: var(--text-2); max-width: 680px; margin: -6px 0 18px; font-size: 14px; line-height: 1.5; }
 .lossy-page .hero-actions { margin: 0 0 28px; }
@@ -662,8 +663,8 @@ body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p
 /* Retirer un titre de « À suivre » */
 .q-item { position: relative; }
 .q-item > div { flex: 1; }
-.q-remove { flex: none; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: var(--text-2); opacity: 0; transition: opacity .2s, background .2s, color .2s; }
-.q-remove svg { width: 13px; height: 13px; }
+.q-remove { flex: none; width: 30px; height: 30px; border-radius: 50%; display: grid; place-items: center; color: var(--text-2); opacity: 0; transition: opacity .2s, background .2s, color .2s; }
+.q-remove svg { width: 16px; height: 16px; }
 .q-item:hover .q-remove, .q-item:focus-visible .q-remove { opacity: 1; }
 .q-remove:hover { background: rgba(255, 255, 255, .12); color: var(--text); }
 
@@ -671,3 +672,7 @@ body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p
 .search { height: 36px; padding: 0 12px; gap: 8px; }
 .search svg { width: 15px; height: 15px; }
 .search input { font-size: 14.5px; color: var(--text); letter-spacing: .005em; }
+
+/* bouton « À suivre » du lecteur : plus visible */
+#b-queue { width: 38px; height: 38px; }
+#b-queue svg { width: 23px; height: 23px; }

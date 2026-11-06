@@ -1,9 +1,10 @@
 #!/bin/zsh
 # Crée ~/Applications/App Music.app, une icône à double-cliquer qui lance scripts/launch.sh,
-# et un raccourci « App Music » sur le bureau (s'il n'y en a pas déjà un).
+# et une copie « App Music » sur le bureau (une vraie app, pas un lien : pas de flèche sur l'icône).
 ROOT="${0:A:h:h}"
 APP="$HOME/Applications/App Music.app"
-LINK="$HOME/Desktop/App Music"
+DESK="$HOME/Desktop/App Music.app"
+OLD_LINK="$HOME/Desktop/App Music"   # ancien raccourci (lien symbolique), remplacé par la copie
 mkdir -p "$HOME/Applications"
 osacompile -o "$APP" -e "do shell script \"zsh '$ROOT/scripts/launch.sh' > /dev/null 2>&1 &\"" || exit 1
 # icône de l'app (même dessin que le favicon : public/icon.svg -> assets/AppIcon.icns, npm run make-icon)
@@ -16,6 +17,7 @@ if [ -f "$ROOT/assets/AppIcon.icns" ]; then
   /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -f "$APP" 2>/dev/null
 fi
 echo "✓ $APP"
-if [ -d "$HOME/Desktop" ] && [ ! -e "$LINK" ] && [ ! -L "$LINK" ]; then
-  ln -s "$APP" "$LINK" && echo "✓ raccourci sur le bureau"
+if [ -d "$HOME/Desktop" ]; then
+  [ -L "$OLD_LINK" ] && rm "$OLD_LINK"
+  rm -rf "$DESK" && cp -R "$APP" "$DESK" && touch "$DESK" && echo "✓ App Music sur le bureau"
 fi

@@ -34,7 +34,7 @@ for (const d of [CACHE, COVERS, META, ARTIST_IMG]) fs.mkdirSync(d, { recursive: 
 // Installations antérieures à l'écran d'accueil : la musique était lue dans ~/Downloads
 if (!MUSIC_DIR && fs.existsSync(LIB_FILE)) { MUSIC_DIR = path.join(os.homedir(), 'Downloads'); writeConfig({ musicDir: MUSIC_DIR }); }
 
-// Premier lancement : crée l'app dans ~/Applications et un raccourci sur le bureau, une seule fois
+// Premier lancement : crée l'app dans ~/Applications et sa copie sur le bureau, une seule fois
 // (s'il est supprimé ensuite, il n'est pas recréé). Pas pour les instances de test (APPMUSIC_CONFIG).
 async function firstRunShortcut() {
   if (process.platform !== 'darwin' || process.env.APPMUSIC_CONFIG || readConfig().shortcut) return;
