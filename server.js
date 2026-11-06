@@ -18,6 +18,7 @@ const COVERS = path.join(CACHE, 'covers');
 const META = path.join(CACHE, 'meta');
 const ARTIST_IMG = path.join(CACHE, 'artists');
 const LIB_FILE = path.join(CACHE, 'library.json');
+const LOSSY_LOG = path.join(CACHE, 'lossy-log.json'); // journal des albums avec perte (MP3…)
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
 const UA = 'AppMusic/1.0 (application musicale locale)';
 const CONFIG_FILE = process.env.APPMUSIC_CONFIG || path.join(ROOT, 'config.json'); // propre à chaque machine, ignoré par Git
@@ -159,7 +160,11 @@ async function scan() {
   for (const a of albums.values()) {
     a.tracks.sort((x, y) => { const X = byId.get(x), Y = byId.get(y); return X.disc - Y.disc || X.trackNo - Y.trackNo || X.path.localeCompare(Y.path); });
     const first = byId.get(a.tracks[0]);
-    a.format = first.lossless && first.bits ? `${first.codec} ${first.bits} bits · ${(first.rate / 1000).toLocaleString('fr-FR')} kHz` : `${first.codec}${first.bitrate ? ' · ' + Math.round(first.bitrate / 1000) + ' kb/s' : ''}`;
+    a.format = first.lossless && first.bits ? `${first.codec} ${first.bits} bits · ${(first.rate / 1000).toLocaleString('fr-FR')} kHz` : `${codecName(first)}${first.bitrate ? ' · ' + Math.round(first.bitrate / 1000) + ' kb/s' : ''}`;
+    // titres avec perte (MP3, AAC…) : signalés dans l'interface et tenus dans un journal
+    const lossy = a.tracks.map((id) => byId.get(id)).filter((t) => !t.lossless);
+    a.lossy = lossy.length;
+    a.lossyCodec = lossy.length ? [...new Set(lossy.map(codecName))].join(', ') : null;
     a.discs = new Set(a.tracks.map((id) => byId.get(id).disc)).size;
     a.hasCover = await ensureCover(a, pictures.get(a.id));
     a.dirs = undefined;
@@ -185,11 +190,49 @@ async function scan() {
     scannedAt: new Date().toISOString(),
   };
   await fsp.writeFile(LIB_FILE, JSON.stringify(library));
+  await updateLossyLog().catch((e) => console.warn('Journal MP3 :', e.message));
   scanning = false;
   hitIndex = null;
   if (rescanAfter) { rescanAfter = false; setTimeout(scan, 100); }
   setTimeout(syncMetadata, 1000);
   console.log(`Indexation : ${tracks.length} titres, ${albums.size} albums, ${artists.size} artistes en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+}
+
+// Nom lisible d'un format avec perte (« MPEG 1 Layer 3 » -> « MP3 »)
+function codecName(t) {
+  const c = t.codec || '';
+  if (/layer\s*3|^mp3$/i.test(c)) return 'MP3';
+  if (/aac|mp4a|alac/i.test(c)) return /alac/i.test(c) ? 'ALAC' : 'AAC';
+  if (/vorbis|^ogg$/i.test(c)) return 'Ogg Vorbis';
+  if (/opus/i.test(c)) return 'Opus';
+  return c || path.extname(t.path || '').slice(1).toUpperCase();
+}
+
+// ---------- Journal des albums avec perte (cache/lossy-log.json) ----------
+// albumId -> { artist, title, year, firstSeen, resolvedAt } ; resolvedAt est daté quand l'album
+// n'est plus avec perte (remplacé par du FLAC, ou retiré du dossier).
+async function readLossyLog() { try { return JSON.parse(await fsp.readFile(LOSSY_LOG, 'utf8')); } catch { return {}; } }
+async function updateLossyLog() {
+  const log = await readLossyLog();
+  const now = new Date().toISOString();
+  const current = new Set();
+  for (const a of library.albums) {
+    if (!a.lossy) continue;
+    current.add(a.id);
+    const e = log[a.id];
+    log[a.id] = { artist: a.artist, title: a.title, year: a.year || null, codec: a.lossyCodec, firstSeen: e?.firstSeen || now, resolvedAt: null };
+  }
+  for (const [id, e] of Object.entries(log)) if (!current.has(id) && !e.resolvedAt) e.resolvedAt = now;
+  await fsp.writeFile(LOSSY_LOG, JSON.stringify(log, null, 1));
+}
+const csvCell = (v) => { const s = v == null ? '' : String(v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+function lossyCsv() {
+  const albums = new Map(library.albums.map((a) => [a.id, a]));
+  const rows = library.tracks.filter((t) => !t.lossless)
+    .sort((x, y) => x.albumArtist.localeCompare(y.albumArtist, 'fr') || x.album.localeCompare(y.album, 'fr') || x.disc - y.disc || x.trackNo - y.trackNo)
+    .map((t) => [t.albumArtist, albums.get(t.albumId)?.title || t.album, t.year, t.title, codecName(t), t.bitrate ? Math.round(t.bitrate / 1000) : '', path.relative(MUSIC_DIR, t.path)]);
+  // point-virgule + BOM : s'ouvre directement dans Numbers et dans Excel en français
+  return '\ufeff' + [['Artiste', 'Album', 'Année', 'Titre', 'Format', 'Débit (kb/s)', 'Fichier (dans le dossier de musique)'], ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n';
 }
 
 // Un album = un dossier (les sous-dossiers CD1/CD2 remontent au parent) + un titre.
@@ -679,6 +722,19 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/status') {
       const m = missing();
       return json(res, { scannedAt: library.scannedAt, scanning, scanProgress, needsSetup: !MUSIC_DIR, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync } });
+    }
+    if (p === '/api/lossy') {
+      const log = await readLossyLog();
+      return json(res, {
+        albums: library.albums.filter((a) => a.lossy).map((a) => ({ id: a.id, firstSeen: log[a.id]?.firstSeen || null })),
+        history: Object.entries(log).filter(([, e]) => e.resolvedAt).map(([id, e]) => ({ id, ...e })).sort((x, y) => y.resolvedAt.localeCompare(x.resolvedAt)),
+        files: library.tracks.filter((t) => !t.lossless).length,
+      });
+    }
+    if (p === '/api/lossy.csv') {
+      const day = new Date().toISOString().slice(0, 10);
+      res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="albums-avec-perte-${day}.csv"`, 'Cache-Control': 'no-store' });
+      return res.end(lossyCsv());
     }
     if (p === '/api/rescan' && req.method === 'POST') { scan(); return json(res, { ok: true }); }
     if (p === '/api/setup' && req.method === 'GET') return json(res, { musicDir: MUSIC_DIR, label: tilde(MUSIC_DIR), fromEnv: !!process.env.MUSIC_DIR, candidates: await candidates() });

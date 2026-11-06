@@ -138,6 +138,27 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.equal(await page.evaluate(() => location.hash), `#/album/${focused}`);
   });
 
+  test('albums MP3 : triangle discret, lien dans « Ma bibliothèque », page et liste à télécharger', async () => {
+    await page.goto(srv.url + '/?mp3#/albums'); await page.waitForSelector('.card[data-album]'); await sleep(400);
+    const marked = await page.$$eval('.card[data-album]', (els) => els.filter((e) => e.querySelector('.lossy')).map((e) => e.querySelector('.card-title').textContent));
+    assert.deepEqual(marked, ['Café Serré'], 'seul l’album MP3 porte le triangle');
+    assert.equal(await page.getAttribute('.card .lossy', 'title'), 'Album en MP3 (avec perte)');
+    await go(`#/album/${album('Café Serré').id}`, '.hero-facts');
+    assert.equal(await page.$eval('.hero-facts .badge', (e) => e.classList.contains('warn')), true);
+    await go(`#/album/${album('Nuit Blanche').id}`, '.hero-facts');
+    assert.equal(await page.$eval('.hero-facts .badge', (e) => e.classList.contains('warn')), false);
+    assert.match(await page.textContent('#lib-meta .lossy-link'), /1 album en MP3/);
+    await page.click('#lib-meta .lossy-link');
+    await page.waitForSelector('.lossy-page .card[data-album]'); await sleep(500);
+    assert.equal(await page.textContent('.lossy-page h1'), 'Albums en MP3');
+    assert.deepEqual(await page.$$eval('.lossy-page .card .card-title', (e) => e.map((x) => x.textContent)), ['Café Serré']);
+    assert.match(await page.textContent('.lossy-page .lossy-seen'), /^Repéré le \d{1,2} \S+ \d{4}$/);
+    const link = await page.$('.lossy-page a[download]');
+    assert.equal(await link.getAttribute('href'), '/api/lossy.csv');
+    const [download] = await Promise.all([page.waitForEvent('download'), link.click()]);
+    assert.match(download.suggestedFilename(), /^albums-avec-perte-\d{4}-\d\d-\d\d\.csv$/);
+  });
+
   test('hors ligne : aucune ressource externe chargée, aucune erreur JavaScript', () => {
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);

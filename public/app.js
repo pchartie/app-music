@@ -15,6 +15,7 @@ const ICON = {
   play: '<svg viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg>',
   shuffle: '<svg viewBox="0 0 24 24"><path d="M3 7h3.5c3.5 0 4.5 10 8 10H20M3 17h3.5c1.4 0 2.4-1.6 3.3-3.6M14.5 7H20M17.5 4 20.5 7l-3 3M17.5 14l3 3-3 3M11.3 9.4C12.2 8 13.1 7 14.5 7" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
   eq: '<span class="eq"><i></i><i></i><i></i></span>',
+  download: '<svg viewBox="0 0 24 24"><path d="M12 4v11m0 0-4.5-4.5M12 15l4.5-4.5M5 19.5h14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
 };
 
 let LIB = { albums: [], artists: [], tracks: [] };
@@ -42,7 +43,8 @@ async function loadLibrary() {
   const n = (x) => x.toLocaleString('fr-FR');
   $('#stats').innerHTML = [[r.albums.length, 'albums'], [r.artists.length, 'artistes'], [r.tracks.length, 'titres'], [Math.round(total / 3600) + ' h', 'd’écoute']]
     .map(([v, l]) => `<div><b>${typeof v === 'number' ? n(v) : v}</b><span>${l}</span></div>`).join('');
-  const lossless = r.tracks.length && r.tracks.every((t) => t.lossless) ? 'FLAC sans perte' : 'Mixte';
+  const lossyN = r.albums.filter((a) => a.lossy).length;
+  const lossless = !lossyN ? 'FLAC sans perte' : `<a href="#/mp3" class="lossy-link" title="Voir les albums avec perte et télécharger la liste">${WARN}${n(lossyN)} album${lossyN > 1 ? 's' : ''} en ${lossyN && r.albums.filter((a) => a.lossy).every((a) => a.lossyCodec === 'MP3') ? 'MP3' : 'avec perte'}</a>`;
   const when = r.scanning ? `Indexation ${r.scanProgress.done}/${r.scanProgress.total}` : r.scannedAt ? new Date(r.scannedAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
   $('#lib-meta').innerHTML = `<div><span>Taille</span><span>${(r.bytes / 1e9).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go</span></div>
     <div><span>Qualité</span><span>${lossless}</span></div><div><span>Dossier</span><button class="folder-btn" data-change-folder title="Changer de dossier">${esc(r.folder || '—')}</button></div><div><span>Mise à jour</span><span>${when}</span></div>
@@ -92,12 +94,17 @@ function attachTilt(root, max = 12) {
 }
 function onImgLoad(root) { $$('img[data-fade]', root).forEach((i) => { if (i.complete && i.naturalWidth) i.classList.add('loaded'); else i.addEventListener('load', () => i.classList.add('loaded'), { once: true }); }); }
 
+// Petit triangle discret : album (ou partie d'album) dans un format avec perte (MP3, AAC…)
+const WARN = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M8 1.6 15.2 14.2H.8z" fill="currentColor" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round"/><path d="M8 6.2v3.4" stroke="#141414" stroke-width="1.7" stroke-linecap="round"/><circle cx="8" cy="11.9" r="1" fill="#141414"/></svg>';
+const lossyText = (a) => (a.lossy >= a.tracks.length ? `Album en ${a.lossyCodec} (avec perte)` : `${a.lossy} titre${a.lossy > 1 ? 's' : ''} sur ${a.tracks.length} en ${a.lossyCodec} (avec perte)`);
+const lossyMark = (a) => (a.lossy ? `<span class="lossy" title="${esc(lossyText(a))}">${WARN}</span>` : '');
+const lossyAlbums = () => LIB.albums.filter((a) => a.lossy);
 const albumCard = (a) => `
   <div class="card tilt-host" data-album="${a.id}" draggable="true">
     <div class="tilt"><img data-fade loading="lazy" src="${cover(a.id)}" alt=""><div class="glare"></div>
       <button class="card-play" data-play-album="${a.id}" title="Lire">${ICON.play}</button></div>
     <div class="card-title">${esc(a.title)}</div>
-    <div class="card-sub">${esc(a.artist)}${a.year ? ' · ' + a.year : ''}</div>
+    <div class="card-sub">${esc(a.artist)}${a.year ? ' · ' + a.year : ''}${lossyMark(a)}</div>
   </div>`;
 
 // ---------- Infos en ligne ----------
@@ -129,7 +136,7 @@ function route() {
   view.classList.remove('view-enter'); void view.offsetWidth; view.classList.add('view-enter');
   view.scrollTop = 0;
   if (['flow', 'albums', 'artists', 'tracks'].includes(name)) store.set('lastView', name);
-  ({ flow: viewFlow, albums: viewAlbums, album: viewAlbum, artists: viewArtists, artist: viewArtist, tracks: viewTracks, search: viewSearch }[name] || viewFlow)(arg && decodeURIComponent(arg));
+  ({ flow: viewFlow, albums: viewAlbums, album: viewAlbum, artists: viewArtists, artist: viewArtist, tracks: viewTracks, search: viewSearch, mp3: viewLossy }[name] || viewFlow)(arg && decodeURIComponent(arg));
   nav.makeFocusable(view);
   if (name !== 'search' || document.activeElement !== $('#search')) nav.restore(location.hash);
   currentHash = location.hash;
@@ -245,7 +252,7 @@ function viewFlow(startId) {
     const a = albums[cur];
     scrub.value = cur; store.set('flowAlbum', a.id);
     $('.t', cap).textContent = a.title;
-    $('.a', cap).innerHTML = `<a href="#/artist/${a.artistId}">${esc(a.artist)}</a>${a.year ? ' · ' + a.year : ''}`;
+    $('.a', cap).innerHTML = `<a href="#/artist/${a.artistId}">${esc(a.artist)}</a>${a.year ? ' · ' + a.year : ''}${lossyMark(a)}`;
     clearTimeout(capTimer);
     capTimer = setTimeout(() => setAmbient(a.id), 160);
   }
@@ -303,6 +310,34 @@ function viewFlow(startId) {
   cleanup = () => { window.removeEventListener('keydown', onKey, true); ro.disconnect(); cancelAnimationFrame(raf); };
 }
 
+// ---------- Albums avec perte (MP3…) : journal et liste à télécharger ----------
+const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+function viewLossy() {
+  const list = lossyAlbums().sort((a, b) => a.artist.localeCompare(b.artist, 'fr') || (a.year || 0) - (b.year || 0));
+  const allMp3 = list.every((a) => a.lossyCodec === 'MP3');
+  const files = list.reduce((n, a) => n + a.lossy, 0);
+  view.innerHTML = `<div class="page lossy-page">
+    <div class="page-head"><h1>${allMp3 ? 'Albums en MP3' : 'Albums avec perte'}</h1><span class="muted">${list.length ? `${list.length} album${list.length > 1 ? 's' : ''} · ${files} fichier${files > 1 ? 's' : ''}` : ''}</span></div>
+    ${list.length ? `<p class="lossy-intro">Ces albums ne sont pas en qualité sans perte${allMp3 ? '' : ' (MP3, AAC…)'}. L’app note la date où chacun a été repéré ;
+      remplacé par du FLAC, il passe dans l’historique.</p>
+      <div class="hero-actions"><a class="btn primary" href="/api/lossy.csv" download data-autofocus>${ICON.download} Télécharger la liste des fichiers</a></div>
+      <div class="grid">${list.map(albumCard).join('')}</div>`
+    : '<div class="empty">Toute la bibliothèque est sans perte. ✨</div>'}
+    <div id="lossy-history"></div></div>`;
+  onImgLoad(view);
+  fetch('/api/lossy').then((r) => r.json()).then(({ albums, history }) => {
+    const seen = new Map(albums.map((x) => [x.id, x.firstSeen]));
+    for (const card of $$('.grid .card[data-album]', view)) {
+      const d = seen.get(card.dataset.album);
+      if (d) card.insertAdjacentHTML('beforeend', `<div class="card-sub lossy-seen">Repéré le ${fmtDay(d)}</div>`);
+    }
+    const box = $('#lossy-history'); if (!box || !history.length) return;
+    box.innerHTML = `<h2>Historique</h2><p class="lossy-intro">Albums qui ne sont plus avec perte (remplacés ou retirés du dossier).</p>
+      <table class="lossy-log"><tbody>${history.map((e) => `<tr><td><b>${esc(e.title)}</b><span>${esc(e.artist)}${e.year ? ' · ' + e.year : ''}</span></td>
+        <td>${esc(e.codec || '')}</td><td>Repéré le ${fmtDay(e.firstSeen)}</td><td>Réglé le ${fmtDay(e.resolvedAt)}</td></tr>`).join('')}</tbody></table>`;
+  }).catch(() => {});
+}
+
 // ---------- Albums ----------
 function viewAlbums() {
   const sort = store.get('albumSort', 'artist');
@@ -349,7 +384,7 @@ function viewAlbum(id) {
         <h1>${esc(a.title)}</h1>
         <a class="hero-artist" href="#/artist/${a.artistId}">${esc(a.artist)}</a>
         <p class="hero-note" id="hero-note"></p>
-        <div class="hero-facts">${[a.genre, a.year, `${a.tracks.length} titres`, fmtLong(a.duration)].filter(Boolean).map(esc).join(' · ')} <span class="badge">${esc(a.format)}</span></div>
+        <div class="hero-facts">${[a.genre, a.year, `${a.tracks.length} titres`, fmtLong(a.duration)].filter(Boolean).map(esc).join(' · ')} <span class="badge${a.lossy ? ' warn' : ''}"${a.lossy ? ` title="${esc(lossyText(a))}"` : ''}>${a.lossy ? WARN : ''}${esc(a.format)}</span></div>
         <div class="hero-actions"><button class="btn primary" data-act="play" data-autofocus>${ICON.play} Lecture</button><button class="btn soft" data-act="shuffle">${ICON.shuffle} Aléatoire</button></div>
       </div>
     </div>

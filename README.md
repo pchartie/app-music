@@ -73,6 +73,13 @@ Quelques mots suffisent, même approximatifs : `metalica`, `rhcp`, `acdc`, `ann�
 Une étoile ★ signale les grands classiques, c'est-à-dire les titres classés au moins 800 000 en popularité sur Deezer
 (*Nothing Else Matters*, *Seven Nation Army*, *Mistral gagnant*…). Chaque page d'artiste commence par ses titres populaires.
 
+## Albums en MP3
+
+Un petit triangle ⚠ discret signale les albums dans un format avec perte (MP3, AAC…), sous la pochette et sur la page de l'album.
+Le panneau « Ma bibliothèque » indique leur nombre et ouvre une page qui les rassemble. L'app y tient un journal : la date
+à laquelle chaque album a été repéré et, une fois remplacé par du FLAC, la date à laquelle il ne l'est plus.
+Le bouton **Télécharger la liste des fichiers** donne un CSV (Numbers, Excel) de tous les fichiers concernés, avec leur emplacement.
+
 ## Commande vocale (locale)
 
 La reconnaissance vocale utilise [whisper.cpp](https://github.com/ggml-org/whisper.cpp) et tourne entièrement sur votre Mac : votre voix n'est envoyée nulle part.

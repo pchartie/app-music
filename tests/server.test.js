@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { startServer } from './helpers.js';
-import { EXPECTED, fingerprint, flac } from './fixtures.js';
+import { EXPECTED, fingerprint, flac, mp3 } from './fixtures.js';
 
 let srv, lib, printBefore;
 const album = (title) => lib.albums.find((a) => a.title === title);
@@ -129,6 +129,58 @@ test('nouvel album ajouté puis réindexation', async () => {
   await srv.api('/api/rescan', { method: 'POST' });
   for (let i = 0; i < 100 && album('Premier Pas'); i++) { await new Promise((r) => setTimeout(r, 50)); lib = (await srv.api('/api/library')).body; }
   assert.equal(album('Premier Pas'), undefined, 'album retiré');
+});
+
+test('albums avec perte : repérés, format lisible', () => {
+  const a = album('Café Serré');
+  assert.equal(a.lossy, 3);
+  assert.equal(a.lossyCodec, 'MP3');
+  assert.match(a.format, /^MP3 · \d+ kb\/s$/);
+  for (const x of lib.albums.filter((x) => x !== a)) assert.equal(x.lossy, 0, `${x.title} est sans perte`);
+});
+
+test('albums avec perte : liste et fichier CSV à télécharger', async () => {
+  const { body } = await srv.api('/api/lossy');
+  assert.deepEqual(body.albums.map((x) => x.id), [album('Café Serré').id]);
+  assert.ok(body.albums[0].firstSeen, 'date de repérage');
+  assert.equal(body.files, 3);
+  const csv = await srv.api('/api/lossy.csv');
+  assert.equal(csv.status, 200);
+  assert.match(csv.headers.get('content-disposition'), /attachment; filename="albums-avec-perte-\d{4}-\d\d-\d\d\.csv"/);
+  const text = csv.body.toString('utf8');
+  assert.ok(text.startsWith('\ufeff'), 'BOM pour Excel');
+  const lines = text.slice(1).trim().split('\r\n');
+  assert.equal(lines.length, 4, 'en-tête + 3 fichiers MP3');
+  assert.equal(lines[0], 'Artiste;Album;Année;Titre;Format;Débit (kb/s);Fichier (dans le dossier de musique)');
+  assert.match(lines[1], /^Moka;Café Serré;2003;Expresso;MP3;\d+;Moka - Café Serré\/01 Expresso\.mp3$/);
+  assert.ok(!text.includes(srv.music), 'chemins relatifs au dossier de musique');
+});
+
+test('journal : date de repérage conservée, historique après remplacement par du FLAC', async () => {
+  const dir = path.join(srv.music, 'Brouillon - Maquettes');
+  const lossyIds = async () => (await srv.api('/api/lossy')).body;
+  const rescan = async () => { const before = (await srv.api('/api/status')).body.scannedAt; await srv.api('/api/rescan', { method: 'POST' });
+    for (let i = 0; i < 100; i++) { const st = (await srv.api('/api/status')).body; if (st.scannedAt !== before && !st.scanning) return; await new Promise((r) => setTimeout(r, 50)); } };
+  fs.mkdirSync(dir);
+  fs.writeFileSync(path.join(dir, '01 Essai.mp3'), mp3({ tags: { title: 'Essai', artist: 'Brouillon', album: 'Maquettes', track: 1 } }));
+  await rescan();
+  let l = await lossyIds();
+  assert.equal(l.albums.length, 2);
+  const first = l.albums.find((x) => x.id !== album('Café Serré').id);
+  await rescan();
+  l = await lossyIds();
+  assert.equal(l.albums.find((x) => x.id === first.id)?.firstSeen, first.firstSeen, 'date inchangée à la réindexation');
+  // remplacé par du FLAC : sort de la liste, entre dans l'historique
+  fs.rmSync(path.join(dir, '01 Essai.mp3'));
+  fs.writeFileSync(path.join(dir, '01 Essai.flac'), flac({ tags: { TITLE: 'Essai', ARTIST: 'Brouillon', ALBUM: 'Maquettes', TRACKNUMBER: 1 } }));
+  await rescan();
+  l = await lossyIds();
+  assert.deepEqual(l.albums.map((x) => x.id), [album('Café Serré').id]);
+  assert.equal(l.history.length, 1);
+  assert.deepEqual([l.history[0].title, l.history[0].artist, l.history[0].codec, l.history[0].firstSeen], ['Maquettes', 'Brouillon', 'MP3', first.firstSeen]);
+  assert.ok(l.history[0].resolvedAt >= first.firstSeen);
+  fs.rmSync(dir, { recursive: true });
+  await rescan();
 });
 
 test('règle absolue : les fichiers de musique ne sont jamais modifiés, déplacés ni ajoutés', () => {
