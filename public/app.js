@@ -163,7 +163,47 @@ const view = $('#view');
 let cleanup = null;
 let currentHash = location.hash;
 let arriving = null; // album ouvert depuis le Cover Flow (transition animée)
+// Fil de navigation dans l'app : le bouton « Retour » revient là d'où l'on vient (album ouvert depuis un artiste, une recherche, une sélection…)
+const trail = [];
+const sameStop = (a, b) => a === b || (/^#\/?search/.test(a || '') && /^#\/?search/.test(b || ''));
+const TOP = { flow: 'Cover Flow', albums: 'Albums', artists: 'Artistes', selections: 'Sélections', mp3: 'Albums en MP3' };
+function stopLabel(hash) {
+  const [name, arg] = (hash || '').replace(/^#\/?/, '').split('/');
+  const id = arg && decodeURIComponent(arg);
+  if (name === 'album') return A.get(id)?.title || 'Album';
+  if (name === 'artist') return R.get(id)?.name || 'Artiste';
+  if (name === 'selection') return mixes().get(id)?.title || 'Sélection';
+  if (name === 'search') return 'Recherche';
+  return TOP[name] || TOP[store.get('lastView', 'flow')] || 'Cover Flow';
+}
+// où revenir quand on arrive directement sur la page (lien, rechargement)
+function fallbackStop(name, arg) {
+  if (name === 'album') { const a = A.get(arg); return a && R.get(a.artistId) ? `#/artist/${a.artistId}` : '#/albums'; }
+  return { artist: '#/artists', selection: '#/selections' }[name] || '#/' + store.get('lastView', 'flow');
+}
+function backTarget() {
+  if (trail.length > 1) return { hash: trail[trail.length - 2], history: true };
+  const [name, arg] = location.hash.replace(/^#\/?/, '').split('/');
+  return { hash: fallbackStop(name, arg && decodeURIComponent(arg)), history: false };
+}
+function navigateBack() {
+  const t = backTarget();
+  if (t.history) history.back(); else location.hash = t.hash;
+}
+function addBackButton() {
+  const t = backTarget();
+  const b = document.createElement('button');
+  b.className = 'back-btn'; b.id = 'b-back'; b.title = 'Revenir (Échap)';
+  b.innerHTML = `<svg viewBox="0 0 24 24"><path d="m14.5 5-7 7 7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg><span></span>`;
+  b.querySelector('span').textContent = stopLabel(t.hash);
+  b.onclick = navigateBack;
+  view.prepend(b);
+}
 function route() {
+  if (sameStop(trail[trail.length - 2], location.hash)) trail.pop();
+  else if (sameStop(trail[trail.length - 1], location.hash)) trail[trail.length - 1] = location.hash;
+  else trail.push(location.hash);
+  if (trail.length > 50) trail.shift();
   const h = location.hash.replace(/^#\/?/, '') || store.get('lastView', 'flow');
   let [name, arg] = h.split('/');
   if (name === 'tracks') name = 'selections'; // ancienne page « Titres »
@@ -175,6 +215,7 @@ function route() {
   view.scrollTop = 0;
   if (['flow', 'albums', 'artists', 'selections'].includes(name)) store.set('lastView', name);
   ({ flow: viewFlow, albums: viewAlbums, album: viewAlbum, artists: viewArtists, artist: viewArtist, selections: viewSelections, selection: viewSelection, search: viewSearch, mp3: viewLossy }[name] || viewFlow)(arg && decodeURIComponent(arg));
+  if (['album', 'artist', 'selection', 'mp3'].includes(name)) addBackButton();
   nav.makeFocusable(view);
   if (name !== 'search' || document.activeElement !== $('#search')) nav.restore(location.hash);
   currentHash = location.hash;
@@ -1057,7 +1098,8 @@ function goBack() {
   if ($('#voice').classList.contains('open')) return stopVoice();
   if ($('#queue').classList.contains('open')) { $('#q-close').click(); return nav.focusEl($('#b-queue')); }
   if (np.classList.contains('open')) { closeNP(); return nav.focusEl($('#p-now')); }
-  if (/^#\/?(album|artist|search)/.test(location.hash) && history.length > 1) return history.back();
+  if (/^#\/?(album|artist|selection|mp3)/.test(location.hash)) return navigateBack();
+  if (/^#\/?search/.test(location.hash) && history.length > 1) return history.back();
 }
 function adjustSlider(el, dir) {
   const step = dir === 'right' ? 1 : -1;

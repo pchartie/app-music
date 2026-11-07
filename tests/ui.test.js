@@ -99,6 +99,23 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     await page.waitForFunction(() => document.body.classList.contains('paused'));
   });
 
+  test('bouton Retour : revient d’où l’on vient, et a un repli quand on arrive directement', async () => {
+    const nb = album('Nuit Blanche');
+    await go('#/selections', '.mix-card');
+    await go(`#/artist/${nb.artistId}`, `[data-album="${nb.id}"]`);
+    assert.equal(await page.textContent('#b-back span'), 'Sélections');
+    await go(`#/album/${nb.id}`, '.tracklist');
+    assert.equal(await page.textContent('#b-back span'), 'Les Étoiles Filantes');
+    await page.click('#b-back'); await page.waitForFunction((h) => location.hash === h, `#/artist/${nb.artistId}`);
+    await page.waitForSelector('#b-back'); assert.equal(await page.textContent('#b-back span'), 'Sélections');
+    await page.click('#b-back'); await page.waitForFunction(() => location.hash === '#/selections');
+    assert.equal(await page.$('#b-back'), null, 'pas de bouton sur les pages principales');
+    // arrivée directe (rechargement) sur un album : retour vers l’artiste
+    await go(`#/album/${nb.id}`, '#b-back'); await page.reload(); await page.waitForSelector('#b-back');
+    assert.equal(await page.textContent('#b-back span'), 'Les Étoiles Filantes');
+    await page.click('#b-back'); await page.waitForFunction((h) => location.hash === h, `#/artist/${nb.artistId}`);
+  });
+
   test('« À suivre » : glisser un titre, un album, réorganiser, vider, garder au rechargement', async () => {
     await go(`#/album/${album('Nuit Blanche').id}`, '.tracklist tr[data-track]');
     await page.click('.tracklist tr[data-track]'); await sleep(300); await page.click('#b-play');
