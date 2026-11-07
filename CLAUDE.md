@@ -32,6 +32,10 @@ npm run install-voice             # optionnel : reconnaissance vocale (whisper.c
 
 `cache/` et `config.json` ne sont pas versionnés : les métadonnées se retéléchargent au premier lancement (connexion requise une fois).
 
+**Multiplateforme** : l'app tournera aussi sur un portable Linux (changement de machine prévu). Toute fonction qui
+dépend du système (`caffeinate`, `open`, `sips`, `osascript`, détection du réseau…) doit passer par une petite couche
+avec un équivalent Linux (`systemd-inhibit`, `xdg-open`…).
+
 ## Feuille de route (discutée, pas commencée)
 
 1. **Téléphone dans l'appartement** : serveur accessible sur le réseau local (aujourd'hui lié à 127.0.0.1 exprès),
@@ -44,7 +48,9 @@ npm run install-voice             # optionnel : reconnaissance vocale (whisper.c
    en AAC/Opus pour la 4G (sans toucher aux FLAC).
 
 Étape 1, choix tranchés le 2026-11-07 : **télécommande d'abord** (le Mac joue, le téléphone pilote), un seul utilisateur
-(pas de mode invité), accès réseau ouvert en permanence mais chaque appel du téléphone exige une clé d'appareil obtenue
+(pas de mode invité), accès réseau ouvert seulement sur le réseau de la maison (le portable se déplace ; ailleurs, l'app reste sur
+127.0.0.1 : reconnaître le réseau d'une façon qui marche aussi sous Linux), chaque appel du téléphone exige une clé d'appareil obtenue
 en scannant un QR code affiché sur le Mac (code à usage unique, quelques minutes), appareils révocables ; actions
-d'administration (dossier, réindexation) réservées au Mac ; empêcher la veille du Mac pendant le pilotage ; téléphone Android
+d'administration (dossier, réindexation) réservées au Mac ; empêcher la veille pendant le pilotage, jusqu'à 1 h après la dernière action du téléphone ; si l'app n'est pas ouverte,
+bouton « Ouvrir sur le Mac » sur le téléphone (le serveur lance la page) ; téléphone Android
 (Chrome). Phases : socle réseau + clés → appairage QR → interface mobile → télécommande → (plus tard) son sur le téléphone, HTTPS.
