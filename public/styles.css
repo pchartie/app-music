@@ -273,15 +273,29 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
   position: fixed; left: calc(var(--sidebar-w) + 16px); right: 16px; bottom: 12px; height: var(--player-h);
   background: rgba(20, 20, 22, .42); backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%);
   border: 1px solid rgba(255, 255, 255, .09); border-radius: 16px; box-shadow: 0 20px 50px -14px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .07);
-  display: grid; grid-template-columns: 1fr minmax(320px, 1.3fr) 1fr; align-items: center; gap: 18px; padding: 0 16px 0 10px; z-index: 20;
+  display: grid; grid-template-columns: 1fr minmax(320px, 1.3fr) 1fr; align-items: center; gap: 18px; padding: 0 12px 0 16px; z-index: 20;
 }
 .p-now { display: flex; align-items: center; gap: 12px; min-width: 0; cursor: pointer; border-radius: 10px; padding: 6px; transition: background .2s; }
 .p-now:hover { background: var(--hover); }
-.p-art { width: 52px; height: 52px; border-radius: 7px; overflow: hidden; background: var(--bg-2); flex: none; box-shadow: 0 4px 12px -4px rgba(0, 0, 0, .35); }
+/* boîtier CD qui dépasse du lecteur ; le disque sort en tournant pendant la lecture */
+.p-case { position: relative; width: 118px; height: 56px; flex: none; perspective: 600px; }
+.p-art { position: absolute; left: 0; bottom: -4px; width: 94px; height: 94px; border-radius: 4px; overflow: hidden; background: var(--bg-2); transform: rotateY(18deg); transform-origin: left;
+  box-shadow: 10px 14px 28px -6px rgba(0, 0, 0, .75), inset 5px 0 0 rgba(255, 255, 255, .15); transition: transform .5s var(--ease); }
+.p-art::after { content: ""; position: absolute; inset: 0; background: linear-gradient(115deg, rgba(255, 255, 255, .26), transparent 40%); pointer-events: none; }
 .p-art img { width: 100%; height: 100%; object-fit: cover; }
+.p-art img:not([src]), .p-art img[src=""] { visibility: hidden; }
+.p-now:hover .p-art { transform: rotateY(10deg) translateY(-3px); }
+.p-cd { position: absolute; left: 6px; bottom: 0; width: 86px; height: 86px; border-radius: 50%; opacity: 0;
+  background: conic-gradient(from 30deg, #ddd, #9ad, #fbe, #dfd, #ccc, #9ad, #ddd); box-shadow: 0 6px 16px rgba(0, 0, 0, .5);
+  animation: cd-spin 4s linear infinite paused; transition: left .7s var(--ease), opacity .4s; }
+.p-cd::after { content: ""; position: absolute; left: 50%; top: 50%; width: 20px; height: 20px; margin: -10px; border-radius: 50%; background: #12161b; box-shadow: 0 0 0 7px rgba(255, 255, 255, .55); }
+.has-track .p-cd { opacity: 1; }
+.is-playing .p-cd { left: 30px; animation-play-state: running; }
+@keyframes cd-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .p-cd { animation: none; } }
 .p-meta { min-width: 0; }
-.p-title { font-size: 13.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.p-sub { font-size: 12.5px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-title { font-size: 15px; letter-spacing: -.01em; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-sub { font-size: 13px; color: var(--text-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-center { display: flex; flex-direction: column; align-items: center; gap: 4px; }
 .p-controls { display: flex; align-items: center; gap: 16px; }
 .icon-btn { width: 32px; height: 32px; display: grid; place-items: center; border-radius: 50%; color: var(--text); transition: transform .15s, color .2s, background .2s; position: relative; }
@@ -309,7 +323,19 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .slider:hover .slider-knob, .slider.drag .slider-knob { opacity: 1; transform: scale(1); }
 .p-right { display: flex; align-items: center; justify-content: flex-end; gap: 10px; }
 .vol-ic { width: 17px; height: 17px; color: var(--text-2); flex: none; }
-.slider.vol { flex: 0 1 110px; }
+.slider.vol { flex: 0 1 90px; min-width: 50px; }
+/* progression aux couleurs de la pochette (--pc1 → --pc2, calculées dans app.js) */
+#seek .slider-fill { background: linear-gradient(90deg, rgb(var(--pc1, 161 161 166)), rgb(var(--pc2, 161 161 166))); }
+/* « Ensuite » : le prochain titre, un clic ouvre la file */
+.p-next { display: flex; align-items: center; gap: 9px; padding: 5px 4px 5px 6px; border-radius: 11px; background: rgba(255, 255, 255, .06); flex: 0 1 230px; min-width: 170px; cursor: pointer; transition: background .2s; }
+.p-next:hover { background: rgba(255, 255, 255, .11); }
+.p-next img { width: 36px; height: 36px; border-radius: 6px; object-fit: cover; flex: none; background: var(--bg-2); }
+.p-next img:not([src]), .p-next img[src=""] { display: none; }
+.p-next-meta { min-width: 0; flex: 1; line-height: 1.25; }
+.p-next-meta small { display: block; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
+.p-next-meta b { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.p-next.empty b { color: var(--text-2); font-weight: 500; }
+@media (max-width: 1250px) { .p-next-meta, .p-next img, #p-format { display: none; } .p-next { background: none; padding: 0; } }
 #p-format:empty { display: none; }
 
 /* ---------- Lecture en cours (plein écran) ---------- */

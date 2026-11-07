@@ -72,6 +72,24 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     await page.waitForFunction(() => document.body.classList.contains('paused'));
   });
 
+  test('lecteur : boîtier avec CD, progression aux couleurs de la pochette, carte « Ensuite »', async () => {
+    const titles = ['Minuit pile', 'Boulevard désert', 'Néons', 'Aube'];
+    const cur = await page.textContent('#p-title');
+    assert.equal(await page.textContent('#p-next-title'), titles[titles.indexOf(cur) + 1]);
+    assert.equal(await page.$eval('#p-next-cover', (i) => i.getAttribute('src')?.length > 0), true);
+    // CD présent (un titre est chargé) et rangé dans le boîtier à la pause
+    assert.equal(await page.$eval('.p-cd', (e) => getComputedStyle(e).opacity), '1');
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('.p-cd')).left === '6px', null, { timeout: 3000 });
+    // pochette rouge du disque de test → dégradé rouge
+    await page.waitForFunction(() => document.querySelector('#player').style.getPropertyValue('--pc1'));
+    const [r, g, b] = (await page.$eval('#seek .slider-fill', (e) => getComputedStyle(e).backgroundImage)).match(/rgb\((\d+), (\d+), (\d+)/).slice(1).map(Number);
+    assert.ok(r > g + 60 && r > b + 60, `rouge attendu, obtenu rgb(${r}, ${g}, ${b})`);
+    // un clic sur la carte ouvre « À suivre »
+    await page.click('#p-next-title');
+    await page.waitForFunction(() => document.querySelector('#queue').classList.contains('open'));
+    await page.click('#q-close');
+  });
+
   test('« À suivre » : glisser un titre, un album, réorganiser, vider, garder au rechargement', async () => {
     await go(`#/album/${album('Nuit Blanche').id}`, '.tracklist tr[data-track]');
     await page.click('.tracklist tr[data-track]'); await sleep(300); await page.click('#b-play');

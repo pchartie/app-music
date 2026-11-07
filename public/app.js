@@ -53,6 +53,42 @@ async function loadLibrary() {
   return r;
 }
 
+// ---------- Deux couleurs vives d'une pochette (haut / bas), pour la barre de progression ----------
+const gradCache = new Map();
+function vivid([r, g, b]) {
+  // garde la teinte, pousse saturation et luminosité pour rester visible sur le verre sombre
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2;
+  const k = l < 1 ? 1 : 1 + Math.max(0, 0.6 - (mx - mn) / Math.max(mx, 1));
+  let c = [r, g, b].map((v) => l + (v - l) * k);
+  const top = Math.max(...c); if (top < 190) c = c.map((v) => v * 190 / Math.max(top, 1));
+  return c.map((v) => Math.max(0, Math.min(255, Math.round(v))));
+}
+function coverGradient(albumId) {
+  if (gradCache.has(albumId)) return gradCache.get(albumId);
+  const p = new Promise((res) => {
+    const img = new Image();
+    img.onload = () => {
+      const c = document.createElement('canvas'); c.width = c.height = 24;
+      const x = c.getContext('2d', { willReadFrequently: true }); x.drawImage(img, 0, 0, 24, 24);
+      const d = x.getImageData(0, 0, 24, 24).data;
+      const half = (from, to) => {
+        let r = 0, g = 0, b = 0, w = 0;
+        for (let i = from * 96; i < to * 96; i += 4) {
+          const mx = Math.max(d[i], d[i + 1], d[i + 2]), mn = Math.min(d[i], d[i + 1], d[i + 2]);
+          const wt = 0.05 + ((mx - mn) / 255) ** 2 * (mx > 40 ? 4 : 0.5);
+          r += d[i] * wt; g += d[i + 1] * wt; b += d[i + 2] * wt; w += wt;
+        }
+        return vivid([r / w, g / w, b / w]);
+      };
+      res([half(0, 12), half(12, 24)]);
+    };
+    img.onerror = () => res([[161, 161, 166], [161, 161, 166]]);
+    img.src = cover(albumId);
+  });
+  gradCache.set(albumId, p);
+  return p;
+}
+
 // ---------- Couleur dominante d'une pochette ----------
 const colorCache = new Map();
 function dominant(albumId) {
@@ -870,7 +906,7 @@ $('#b-shuffle').onclick = () => {
   }
   syncButtons(); renderQueue();
 };
-$('#b-repeat').onclick = () => { player.repeat = { off: 'all', all: 'one', one: 'off' }[player.repeat]; store.set('repeat', player.repeat); syncButtons(); };
+$('#b-repeat').onclick = () => { player.repeat = { off: 'all', all: 'one', one: 'off' }[player.repeat]; store.set('repeat', player.repeat); syncButtons(); renderNext(); };
 function syncButtons() {
   $('#b-shuffle').classList.toggle('on', player.shuffle);
   const r = $('#b-repeat'); r.classList.toggle('on', player.repeat !== 'off'); r.classList.toggle('one', player.repeat === 'one');
@@ -881,6 +917,8 @@ let npBg = 0;
 function updateNowPlaying(t) {
   const a = A.get(t.albumId);
   $('#p-cover').src = cover(t.albumId);
+  document.body.classList.add('has-track');
+  coverGradient(t.albumId).then(([c1, c2]) => { if (player.current !== t.id) return; const pl = $('#player'); pl.style.setProperty('--pc1', c1.join(' ')); pl.style.setProperty('--pc2', c2.join(' ')); });
   $('#p-title').textContent = t.title;
   $('#p-sub').textContent = `${t.artist} — ${t.album}`;
   const fmt = t.lossless && t.bits ? `Lossless · ${t.bits} bits/${(t.rate / 1000).toLocaleString('fr-FR')} kHz` : t.codec;
@@ -910,7 +948,17 @@ if ('mediaSession' in navigator) {
 }
 
 // File d'attente
+// carte « Ensuite » du lecteur : le prochain titre de la file
+function renderNext() {
+  const nextPos = player.pos + 1 < player.order.length ? player.pos + 1 : player.repeat === 'all' && player.order.length > 1 ? 0 : -1;
+  const t = nextPos >= 0 ? T.get(player.queue[player.order[nextPos]]) : null;
+  $('#p-next').classList.toggle('empty', !t);
+  $('#p-next-title').textContent = t ? t.title : player.queue.length ? 'Fin de la file' : 'Rien en attente';
+  $('#p-next-title').title = t ? `${t.title} — ${t.artist}` : '';
+  const img = $('#p-next-cover'); if (t) img.src = cover(t.albumId); else img.removeAttribute('src');
+}
 function renderQueue() {
+  renderNext();
   const box = $('#queue-list'); if (!player.queue.length) { $('#q-clear').hidden = true; box.innerHTML = '<div class="empty">Rien en attente.<br><small>Glissez des titres ou des albums ici.</small></div>'; return; }
   const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}" tabindex="0"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></div>${i > player.pos ? `<button class="q-remove" data-remove="${i}" title="Retirer de la file (Suppr)" aria-label="Retirer de la file"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>` : ''}</div>`; };
   const upcoming = player.order.slice(player.pos + 1, player.pos + 101).map((_, k) => item(player.pos + 1 + k)).join('');
@@ -982,6 +1030,7 @@ function removeFromQueue(i) {
 }
 $('#b-queue').onclick = () => { const open = $('#queue').classList.toggle('open'); $('#b-queue').classList.toggle('on'); if (open && nav.usingKeys) setTimeout(() => { nav.makeFocusable($('#queue')); nav.focusEl($('#queue .q-item.current') || $('#q-close')); }, 50); };
 $('#q-clear').onclick = () => player.clearUpcoming();
+$('#p-next').onclick = (e) => { if (!e.target.closest('#b-queue')) $('#b-queue').click(); };
 $('#q-close').onclick = () => { $('#queue').classList.remove('open'); $('#b-queue').classList.remove('on'); };
 
 // Plein écran « À l'écoute »
