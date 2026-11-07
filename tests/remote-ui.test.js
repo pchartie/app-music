@@ -56,6 +56,12 @@ test('un téléphone inconnu ne voit que les instructions d’association', { sk
   await mac.waitForSelector('#remote.open #rm-pair');
   await mac.click('#rm-pair');
   await mac.waitForSelector('.rm-qr svg');
+  // le panneau se met à jour toutes les 2 s sans se redessiner (sinon il clignote)
+  await mac.evaluate(() => { document.querySelector('.rm-panel').dataset.mark = '1'; document.querySelector('.rm-qr').dataset.mark = '1'; });
+  const t0 = await mac.textContent('#rm-left');
+  await sleep(2600);
+  assert.ok(await mac.evaluate(() => document.querySelector('.rm-panel')?.dataset.mark === '1' && document.querySelector('.rm-qr')?.dataset.mark === '1'), 'panneau et QR code inchangés');
+  assert.notEqual(await mac.textContent('#rm-left'), t0, 'le compte à rebours avance');
   await phone.goto(`http://127.0.0.1:${lanPort}/`);
   await phone.waitForSelector('.screen h2');
   assert.match(await phone.textContent('.screen h2'), /pas associé/);

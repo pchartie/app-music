@@ -49,7 +49,7 @@ export function openRemotePanel({ onClose } = {}) {
     const pairArea = qr
       ? `<div class="rm-qr">${qr.svg}</div>
          <p class="rm-hint">Ouvrez l’appareil photo du téléphone et visez ce code.<br>Le téléphone doit être sur le même Wi-Fi.</p>
-         <p class="rm-timer">Valable encore <b id="rm-left">${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}</b> · <button class="link-btn" id="rm-new">Nouveau code</button></p>`
+         <p class="rm-timer">Valable encore <b id="rm-left"></b> · <button class="link-btn" id="rm-new">Nouveau code</button></p>`
       : `${flash ? `<p class="rm-flash">${flash}</p>` : ''}
          <button class="btn primary setup-pick" id="rm-pair"${st.network ? '' : ' disabled'}>${PHONE} ${st.devices.length ? 'Associer un autre téléphone' : 'Associer un téléphone'}</button>`;
     const devices = st.devices.map((d) => `<div class="setup-cand rm-row"><span class="ic">${PHONE}</span><span class="name">${esc(d.name)}</span>
@@ -59,19 +59,35 @@ export function openRemotePanel({ onClose } = {}) {
         <span class="count">${h.current ? 'actuel' : ''}</span>
         <button class="btn soft" data-forget="${esc(h.id)}" title="La télécommande ne s’ouvrira plus sur ce réseau">Oublier</button></div>`).join('');
     const focusedId = document.activeElement?.closest?.('#remote') ? document.activeElement.id || document.activeElement.dataset.revoke || document.activeElement.dataset.forget : null;
-    box.innerHTML = `<div class="setup-panel rm-panel">
-      <div class="setup-logo rm-logo">${PHONE}</div>
-      <h1>Télécommande</h1>
-      <p class="setup-lead">Pilotez App Music depuis votre téléphone, sur le Wi-Fi de la maison. La musique continue de sortir de cet ordinateur.</p>
-      <div class="rm-pair-area">${pairArea}</div>
-      <div class="rm-note">${note(st)}</div>
-      ${devices ? `<div class="setup-sugg"><div class="setup-sugg-title">Téléphones associés</div><div class="setup-list" id="rm-devices">${devices}</div></div>` : ''}
-      ${homes ? `<div class="setup-sugg"><div class="setup-sugg-title">Réseau de la maison</div><div class="setup-list">${homes}</div></div>` : ''}
-      <button class="link-btn setup-cancel" id="rm-close">Fermer</button>
-    </div>`;
-    // garder le focus clavier au même endroit après un rafraîchissement
-    const again = focusedId && (box.querySelector('#' + CSS.escape(focusedId)) || box.querySelector(`[data-revoke="${CSS.escape(focusedId)}"], [data-forget="${CSS.escape(focusedId)}"]`));
-    if (again) again.focus({ preventScroll: true });
+    // le cadre n'est construit qu'une fois ; ensuite, seules les zones dont le contenu a changé sont remplacées
+    // (sinon l'animation d'apparition se rejoue à chaque rafraîchissement et le panneau clignote)
+    if (!box.querySelector('.rm-panel')) {
+      box.innerHTML = `<div class="setup-panel rm-panel">
+        <div class="setup-logo rm-logo">${PHONE}</div>
+        <h1>Télécommande</h1>
+        <p class="setup-lead">Pilotez App Music depuis votre téléphone, sur le Wi-Fi de la maison. La musique continue de sortir de cet ordinateur.</p>
+        <div class="rm-pair-area"></div><div class="rm-note"></div><div class="rm-lists"></div>
+        <button class="link-btn setup-cancel" id="rm-close">Fermer</button>
+      </div>`;
+    }
+    const lists = (devices ? `<div class="setup-sugg"><div class="setup-sugg-title">Téléphones associés</div><div class="setup-list" id="rm-devices">${devices}</div></div>` : '')
+      + (homes ? `<div class="setup-sugg"><div class="setup-sugg-title">Réseau de la maison</div><div class="setup-list">${homes}</div></div>` : '');
+    for (const [sel, html] of [['.rm-pair-area', pairArea], ['.rm-note', note(st)], ['.rm-lists', lists]]) {
+      const el = box.querySelector(sel);
+      if (el.dataset.html !== html) { el.innerHTML = html; el.dataset.html = html; }
+    }
+    tickTimer();
+    // garder le focus clavier au même endroit si sa zone a été redessinée
+    if (focusedId && !box.contains(document.activeElement)) {
+      const again = box.querySelector('#' + CSS.escape(focusedId)) || box.querySelector(`[data-revoke="${CSS.escape(focusedId)}"], [data-forget="${CSS.escape(focusedId)}"]`);
+      if (again) again.focus({ preventScroll: true });
+    }
+  }
+  function tickTimer() {
+    const el = $('#rm-left'); if (!el || !qr) return;
+    const left = Math.max(0, Math.round((qr.expiresAt - Date.now()) / 1000));
+    el.textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
+    if (!left) { qr = null; render(state); }
   }
 
   let state = null, known = null;
@@ -107,13 +123,7 @@ export function openRemotePanel({ onClose } = {}) {
   box.classList.add('open'); box.setAttribute('aria-hidden', 'false');
   refresh().then(() => nav.focusEl($('#rm-pair') || $('#rm-close')));
   clearInterval(poll);
-  poll = setInterval(() => {
-    if (qr && $('#rm-left')) { // compte à rebours sans tout redessiner
-      const left = Math.max(0, Math.round((qr.expiresAt - Date.now()) / 1000));
-      $('#rm-left').textContent = `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}`;
-      if (!left) { qr = null; render(state); }
-    }
-  }, 1000);
+  poll = setInterval(tickTimer, 1000); // compte à rebours sans rien redessiner
   const slow = setInterval(() => { if (!box.classList.contains('open')) return clearInterval(slow); refresh(); }, 2000);
   return { close };
 }
