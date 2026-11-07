@@ -95,6 +95,7 @@ svg { display: block; }
 .mini[hidden] { display: none; }
 .mini-bar { position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: rgba(255, 255, 255, .08); }
 .mini-bar i { display: block; height: 100%; width: 0; background: var(--accent); }
+.mini #mini-queue { color: var(--text); }
 .mini-open { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; text-align: left; height: 100%; }
 .mini-open img { width: 46px; height: 46px; border-radius: 7px; object-fit: cover; background: var(--bg-2); flex: none; }
 .mini-meta { min-width: 0; display: flex; flex-direction: column; }

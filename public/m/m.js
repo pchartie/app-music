@@ -171,9 +171,15 @@ $('#queue').addEventListener('click', (e) => {
 $('#q-clear').onclick = () => cmd('clear');
 
 const np = $('#np');
-function openNP() { if (!S?.current) return; np.classList.add('open'); np.setAttribute('aria-hidden', 'false'); if (location.hash !== '#playing') history.pushState(null, '', '#playing'); }
+function openNP() { if (!S?.current) return; $('.np-scroll').scrollTop = 0; np.classList.add('open'); np.setAttribute('aria-hidden', 'false'); if (location.hash !== '#playing') history.pushState(null, '', '#playing'); }
 function closeNP() { np.classList.remove('open'); np.setAttribute('aria-hidden', 'true'); }
 $('#mini-open').onclick = openNP;
+// bouton « À suivre » du mini-lecteur : l'écran de lecture s'ouvre directement sur la file
+$('#mini-queue').onclick = () => {
+  openNP();
+  const sc = $('.np-scroll');
+  sc.scrollTo({ top: $('.q-head').offsetTop - 12, behavior: 'smooth' });
+};
 $('#np-close').onclick = () => (location.hash === '#playing' ? history.back() : closeNP());
 $('#np-artist').onclick = () => closeNP();
 document.addEventListener('click', (e) => {

@@ -133,8 +133,11 @@ test('« À suivre » : ajout depuis le téléphone, saut et retrait', { skip: !
   await phone.waitForSelector('.tracks .tr');
   await phone.tap(`.tr[data-track="${other.tracks[2]}"] [data-add]`);
   await waitMac((t) => [...document.querySelectorAll('#queue-list .q-item b')].some((b) => b.textContent === t), finalTitle);
-  // la file du téléphone suit, puis on saute directement à ce titre
-  await phone.tap('#mini-open');
+  // la file du téléphone suit (bouton « À suivre » du mini-lecteur), puis on saute directement à ce titre
+  await phone.tap('#mini-queue');
+  await phone.waitForSelector('#np.open');
+  // l'écran défile jusqu'à la file : son titre est à l'écran (en haut si la file est longue)
+  await phone.waitForFunction(() => { const r = document.querySelector('.q-head').getBoundingClientRect(); return document.querySelector('.np-scroll').scrollTop > 0 && r.top >= 0 && r.bottom < innerHeight - 100; }, null, { timeout: 5000 });
   await phone.waitForFunction((t) => [...document.querySelectorAll('#queue .row b')].some((b) => b.textContent.startsWith(t)), finalTitle, { timeout: 8000 });
   const before = await phone.$$eval('#queue .row[data-jump]', (rows) => rows.length);
   await phone.tap(`#queue .row:not(.current) [data-remove]`);
