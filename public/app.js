@@ -1017,7 +1017,7 @@ function renderNext() {
 function renderQueue() {
   renderNext();
   const box = $('#queue-list'); if (!player.queue.length) { $('#q-clear').hidden = true; box.innerHTML = '<div class="empty">Rien en attente.<br><small>Glissez des titres ou des albums ici.</small></div>'; return; }
-  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}" tabindex="0"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><b>${esc(t.title)}</b><span>${esc(t.artist)}</span></div>${i > player.pos ? `<button class="q-remove" data-remove="${i}" title="Retirer de la file (Suppr)" aria-label="Retirer de la file"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>` : ''}</div>`; };
+  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}" tabindex="0"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><div class="q-line"><b>${esc(t.title)}</b>${t.hit ? STAR : ''}</div><span>${esc(t.artist)}</span></div>${i > player.pos ? `<button class="q-remove" data-remove="${i}" title="Retirer de la file (Suppr)" aria-label="Retirer de la file"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>` : ''}</div>`; };
   const upcoming = player.order.slice(player.pos + 1, player.pos + 101).map((_, k) => item(player.pos + 1 + k)).join('');
   $('#q-clear').hidden = player.pos >= player.order.length - 1;
   const top = box.scrollTop;

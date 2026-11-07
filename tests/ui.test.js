@@ -2,8 +2,12 @@
 // Ignoré si aucun navigateur n'est trouvé.
 import { test, before, after, describe } from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import { chromium } from 'playwright-core';
 import { startServer, sleep, findBrowser } from './helpers.js';
+import { makeLibrary } from './fixtures.js';
 
 const executablePath = findBrowser();
 
@@ -270,6 +274,27 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     }
     await oneCol.evaluate((e) => e.remove());
     await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
+  test('« À suivre » : petite étoile sur les titres très connus', async () => {
+    // instance à part dont le cache connaît un tube de l'artiste (les classements sont lus au démarrage)
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'appmusic-hits-'));
+    // 1er démarrage pour connaître les identifiants, 2e avec le classement en cache
+    const music = makeLibrary(path.join(cache, '..', path.basename(cache) + '-music'));
+    let s2 = await startServer({ music, cache });
+    const nb = (await s2.api('/api/library')).body.albums.find((a) => a.title === 'Nuit Blanche');
+    await s2.stop();
+    fs.writeFileSync(path.join(cache, 'meta', `top-${nb.artistId}.json`), JSON.stringify({ tracks: [{ title: 'Boulevard désert', rank: 950000 }] }));
+    s2 = await startServer({ music, cache });
+    const p2 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    try {
+      await p2.goto(s2.url + `/#/album/${nb.id}`); await p2.waitForSelector('.tracklist tr[data-track]');
+      await p2.click('.tracklist tr[data-track]');
+      await p2.waitForFunction(() => document.querySelector('#p-title').textContent === 'Minuit pile');
+      await p2.click('#b-queue'); await p2.waitForSelector('#queue.open');
+      const stars = await p2.$$eval('#queue-list .q-item', (els) => els.map((e) => [e.querySelector('b').textContent, !!e.querySelector('.hit')]));
+      assert.deepEqual(stars.filter(([, h]) => h).map(([t]) => t), ['Boulevard désert']);
+    } finally { await p2.close(); await s2.stop(); for (const d of [cache, music]) fs.rmSync(d, { recursive: true, force: true }); }
   });
 
   test('hors ligne : aucune ressource externe chargée, aucune erreur JavaScript', () => {
