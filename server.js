@@ -12,6 +12,7 @@ import { parseFile } from 'music-metadata';
 import { createRemote } from './lib/remote.js';
 
 const exec = promisify(execFile);
+const STARTED_AT = Date.now(); // le lanceur redémarre le serveur si son code est plus récent
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4321);
 const CACHE = process.env.APPMUSIC_CACHE || path.join(ROOT, 'cache');
@@ -746,7 +747,7 @@ async function handle(req, res, lan = false) {
     }
     if (p === '/api/status') {
       const m = missing();
-      return json(res, { scannedAt: library.scannedAt, scanning, scanProgress, needsSetup: !MUSIC_DIR, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync } });
+      return json(res, { startedAt: STARTED_AT, scannedAt: library.scannedAt, scanning, scanProgress, needsSetup: !MUSIC_DIR, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync } });
     }
     if (p === '/api/lossy') {
       const log = await readLossyLog();
