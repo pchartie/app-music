@@ -710,3 +710,7 @@ body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p
 /* bouton « À suivre » du lecteur : plus visible */
 #b-queue { width: 38px; height: 38px; }
 #b-queue svg { width: 23px; height: 23px; }
+
+/* retour sur Albums / Artistes : bref reflet autour de la pochette qu'on venait d'ouvrir */
+.came-back .tilt, .came-back .avatar { animation: came-back 1.6s var(--ease); }
+@keyframes came-back { 0%, 35% { box-shadow: 0 0 0 3px rgba(255, 255, 255, .85), 0 0 34px 4px rgba(250, 45, 72, .45), var(--shadow-cover); } 100% { box-shadow: var(--shadow-cover); } }

@@ -253,6 +253,25 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.match(download.suggestedFilename(), /^albums-avec-perte-\d{4}-\d\d-\d\d\.csv$/);
   });
 
+  test('Albums et Artistes : on revient pile au même endroit après avoir ouvert une pochette', async () => {
+    await page.setViewportSize({ width: 900, height: 420 }); // assez petit pour devoir défiler avec la bibliothèque de test
+    // peu d'artistes dans la bibliothèque de test : une colonne unique pour que la page défile
+    const oneCol = await page.addStyleTag({ content: '.artist-grid { grid-template-columns: 1fr !important; }' });
+    for (const [list, sel] of [['#/albums', '.card[data-album]'], ['#/artists', '[data-artist]']]) {
+      await go(list, sel);
+      const last = (await page.$$(sel)).at(-1);
+      await last.scrollIntoViewIfNeeded(); await sleep(300);
+      const before = await page.$eval('#view', (v) => v.scrollTop);
+      assert.ok(before > 50, `la liste ${list} doit défiler (scrollTop ${before})`);
+      await last.click(); await page.waitForSelector('#b-back'); await sleep(300);
+      await page.click('#b-back'); await page.waitForFunction((h) => location.hash === h, list); await sleep(300);
+      assert.ok(Math.abs(await page.$eval('#view', (v) => v.scrollTop) - before) < 5, `position retrouvée sur ${list}`);
+      assert.equal(await page.$$eval('.came-back', (e) => e.length), 1, 'la pochette ouverte est signalée');
+    }
+    await oneCol.evaluate((e) => e.remove());
+    await page.setViewportSize({ width: 1440, height: 900 });
+  });
+
   test('hors ligne : aucune ressource externe chargée, aucune erreur JavaScript', () => {
     assert.deepEqual(external, []);
     assert.deepEqual(errors, []);

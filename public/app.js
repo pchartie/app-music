@@ -190,6 +190,17 @@ function navigateBack() {
   const t = backTarget();
   if (t.history) history.back(); else location.hash = t.hash;
 }
+function returnToSpot(name, prevHash) {
+  if (scrollMem.has(name)) view.scrollTop = scrollMem.get(name);
+  const [prev, arg] = prevHash.replace(/^#\/?/, '').split('/');
+  if (!arg || { albums: 'album', artists: 'artist' }[name] !== prev) return;
+  const card = view.querySelector(`[data-${prev}="${CSS.escape(decodeURIComponent(arg))}"]`);
+  if (!card) return;
+  // la pochette doit être visible (fenêtre redimensionnée, tri changé…), puis un bref reflet la signale
+  const r = card.getBoundingClientRect(), v = view.getBoundingClientRect();
+  if (r.top < v.top || r.bottom > v.bottom - 110) card.scrollIntoView({ block: 'center' });
+  card.classList.add('came-back'); setTimeout(() => card.classList.remove('came-back'), 1600);
+}
 function addBackButton() {
   const t = backTarget();
   const b = document.createElement('button');
@@ -199,7 +210,11 @@ function addBackButton() {
   b.onclick = navigateBack;
   view.prepend(b);
 }
+// Albums / Artistes : on revient pile à la même position de défilement, sur la pochette qu'on avait ouverte
+const scrollMem = new Map();
 function route() {
+  const prevHash = currentHash || '', prevName = prevHash.replace(/^#\/?/, '').split('/')[0] || store.get('lastView', 'flow');
+  if (['albums', 'artists'].includes(prevName)) scrollMem.set(prevName, view.scrollTop);
   if (sameStop(trail[trail.length - 2], location.hash)) trail.pop();
   else if (sameStop(trail[trail.length - 1], location.hash)) trail[trail.length - 1] = location.hash;
   else trail.push(location.hash);
@@ -216,6 +231,7 @@ function route() {
   if (['flow', 'albums', 'artists', 'selections'].includes(name)) store.set('lastView', name);
   ({ flow: viewFlow, albums: viewAlbums, album: viewAlbum, artists: viewArtists, artist: viewArtist, selections: viewSelections, selection: viewSelection, search: viewSearch, mp3: viewLossy }[name] || viewFlow)(arg && decodeURIComponent(arg));
   if (['album', 'artist', 'selection', 'mp3'].includes(name)) addBackButton();
+  if (['albums', 'artists'].includes(name) && name !== prevName) returnToSpot(name, prevHash);
   nav.makeFocusable(view);
   if (name !== 'search' || document.activeElement !== $('#search')) nav.restore(location.hash);
   currentHash = location.hash;
