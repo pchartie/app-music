@@ -7,7 +7,6 @@
     "test": "node --test --test-timeout=120000 tests/*.test.js",
     "start": "node server.js",
     "sync": "node server.js --sync",
-    "install-voice": "zsh scripts/install-voice.sh",
     "app": "zsh scripts/launch.sh",
     "make-app": "zsh scripts/make-app.sh",
     "screenshots": "node scripts/screenshots.mjs",

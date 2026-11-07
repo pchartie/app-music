@@ -175,7 +175,7 @@ export function search(index, q) {
     return total || 0.001;
   };
 
-  // Les mots qui ne correspondent à rien dans toute la bibliothèque sont ignorés (fautes, bruit de la dictée)
+  // Les mots qui ne correspondent à rien dans toute la bibliothèque sont ignorés (fautes de frappe)
   let tokens = pq.tokens.map(expand);
   const all = [...index.artists, ...index.albums, ...index.tracks];
   const ignored = [];

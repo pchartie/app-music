@@ -678,24 +678,6 @@ async function pickFolder() {
   } catch { return { cancelled: true }; }
 }
 
-// ---------- Commande vocale (whisper.cpp, entièrement local) ----------
-const WHISPER = path.join(ROOT, 'tools', 'whisper.cpp', 'build', 'bin', 'whisper-cli');
-const WHISPER_MODEL = path.join(ROOT, 'tools', 'ggml-small-q5_1.bin');
-const voiceReady = () => fs.existsSync(WHISPER) && fs.existsSync(WHISPER_MODEL);
-async function transcribe(wav) {
-  const f = path.join(os.tmpdir(), `app-music-voix-${process.pid}-${Date.now()}.wav`);
-  await fsp.writeFile(f, wav);
-  try {
-    // Des exemples de requêtes et les noms d'artistes de la bibliothèque guident la reconnaissance
-    // (« joue Renaud », « metal allemand », « Rammstein », « In Flames »…)
-    const prompt = 'Joue Renaud. Metal allemand. Rock des années 80. Groupe suédois. Rap américain. Artistes : ' + library.artists.map((a) => a.name).join(', ') + '.';
-    const seconds = (wav.length - 44) / 32000; // WAV 16 kHz, 16 bits, mono
-    // fenêtre d'analyse réduite pour les phrases courtes : ~2 s au lieu de ~4 s, et plus juste
-    const ctx = seconds < 9.5 ? ['-ac', '512'] : [];
-    const { stdout } = await exec(WHISPER, ['-m', WHISPER_MODEL, '-f', f, '-l', 'fr', '-nt', '-np', '-t', String(Math.min(8, os.cpus().length)), ...ctx, '--prompt', prompt.slice(0, 900)], { timeout: 60000 });
-    return stdout.replace(/\[.*?\]|\(.*?\)/g, '').replace(/\s+/g, ' ').trim().replace(/[.!?]+$/, '');
-  } finally { fsp.rm(f, { force: true }).catch(() => {}); }
-}
 const readBody = (req, max = 10e6) => new Promise((res, rej) => { const chunks = []; let n = 0; req.on('data', (c) => { n += c.length; if (n > max) { rej(new Error('trop gros')); req.destroy(); } else chunks.push(c); }); req.on('end', () => res(Buffer.concat(chunks))); req.on('error', rej); });
 
 // ---------- HTTP ----------
@@ -770,14 +752,6 @@ async function handle(req, res, lan = false) {
       return json(res, r, r.error ? 400 : 200);
     }
     if (p === '/api/setup/pick' && req.method === 'POST') return json(res, await pickFolder());
-    if (p === '/api/voice/status') return json(res, { available: voiceReady() });
-    if (p === '/api/voice' && req.method === 'POST') {
-      if (!voiceReady()) return json(res, { error: 'not-installed' }, 501);
-      const t0 = Date.now();
-      const text = await transcribe(await readBody(req));
-      console.log(`Voix : « ${text} » (${Date.now() - t0} ms)`);
-      return json(res, { text });
-    }
     if (p === '/api/sync' && req.method === 'POST') { syncMetadata(); return json(res, { ok: true }); }
     let m;
     if ((m = p.match(/^\/api\/artist\/([\w]+)$/))) {

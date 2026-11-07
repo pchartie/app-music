@@ -1,7 +1,7 @@
 # App Music — notes pour Claude Code
 
 Lecteur musical local (Node + page web) pour une bibliothèque FLAC/MP3 : Cover Flow en boîtiers CD 3D,
-fiches artistes/albums, recherche tolérante, commande vocale locale, navigation clavier/télécommande.
+fiches artistes/albums, recherche tolérante, navigation clavier/télécommande.
 Voir README.md pour l'usage et l'organisation du code.
 
 ## Règles du projet (à respecter absolument)
@@ -27,7 +27,6 @@ Voir README.md pour l'usage et l'organisation du code.
 ```sh
 git clone https://github.com/pchartie/app-music ~/AppMusic && cd ~/AppMusic
 npm install && npm run app        # l'écran d'accueil demande le dossier de musique
-npm run install-voice             # optionnel : reconnaissance vocale (whisper.cpp dans tools/)
 ```
 
 `cache/` et `config.json` ne sont pas versionnés : les métadonnées se retéléchargent au premier lancement (connexion requise une fois).
@@ -41,7 +40,7 @@ avec un équivalent Linux (`systemd-inhibit`, `xdg-open`…).
 1. **Téléphone dans l'appartement** (télécommande faite le 2026-11-07 : `lib/remote.js`, `public/m/`, tests `remote*.test.js` ; reste le son sur le téléphone et le HTTPS) : serveur accessible sur le réseau local (aujourd'hui lié à 127.0.0.1 exprès),
    protégé par un code d'accès ; l'écran de choix du dossier reste réservé à la machine locale. Interface tactile/responsive,
    installable comme PWA. Deux modes : son sur le téléphone (streaming) ou télécommande du Mac (le navigateur du Mac joue,
-   le téléphone pilote via le serveur, ex. SSE). Micro sur téléphone = HTTPS requis.
+   le téléphone pilote via le serveur, ex. SSE).
 2. **Portabilité Linux/Docker** (en vue d'un NAS) : remplacer `sips` (miniatures) et `osascript` (sélecteur Finder),
    fournir une image Docker.
 3. **NAS, écoute hors de la maison** : accès via Tailscale (pas d'exposition Internet), transcodage à la volée

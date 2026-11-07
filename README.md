@@ -16,7 +16,7 @@ recherche qui comprend « metal allemand des années 80 », et zéro dépendance
 
 - **Vos fichiers restent intacts.** L'app lit les FLAC et MP3 là où ils sont : aucun déplacement, aucun renommage, aucune réécriture de tags.
 - **Hors ligne, pour de vrai.** Les pochettes, biographies et photos sont téléchargées une seule fois. Ensuite, plus besoin d'Internet.
-- **Pensée pour le canapé.** Tout se pilote au clavier ou à la télécommande, jusqu'à la recherche vocale (traitée sur votre Mac).
+- **Pensée pour le canapé.** Tout se pilote au clavier ou à la télécommande.
 - **Lossless d'abord.** Le format exact est affiché partout : 16 bits/44,1 kHz, 24 bits/96 kHz.
 
 <table>
@@ -91,16 +91,6 @@ Le panneau « Ma bibliothèque » indique leur nombre et ouvre une page qui les 
 à laquelle chaque album a été repéré et, une fois remplacé par du FLAC, la date à laquelle il ne l'est plus.
 Le bouton **Télécharger la liste des fichiers** donne un CSV (Numbers, Excel) de tous les fichiers concernés, avec leur emplacement.
 
-## Commande vocale (locale)
-
-La reconnaissance vocale utilise [whisper.cpp](https://github.com/ggml-org/whisper.cpp) et tourne entièrement sur votre Mac : votre voix n'est envoyée nulle part.
-
-```sh
-npm run install-voice   # compile whisper.cpp et télécharge le modèle « small » (~190 Mo) dans tools/
-```
-
-Ensuite, cliquez sur le micro dans la recherche ou appuyez sur `Ctrl+M`. Les noms des artistes de votre bibliothèque aident la reconnaissance.
-
 ## Téléphone (télécommande)
 
 Pilotez App Music depuis un téléphone Android, sur le Wi-Fi de la maison : la musique continue de sortir de l'ordinateur.
@@ -135,7 +125,6 @@ entrantes (acceptez) ; un VPN peut bloquer le réseau local (autorisez « les co
 | Espace / ⏯ | Lecture / pause |
 | ⏭ ⏮, ⌘→ ⌘← | Titre suivant / précédent |
 | Une lettre | Commencer une recherche |
-| `Ctrl+M` | Recherche vocale |
 
 Sur le curseur de position ou de volume, ← et → avancent de 10 s ou règlent le volume.
 
@@ -161,19 +150,18 @@ L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icô
 
 **Organisation du code.**
 
-- `server.js` : indexation, audio, cache, synchronisation des métadonnées, reconnaissance vocale
+- `server.js` : indexation, audio, cache, synchronisation des métadonnées
 - `public/app.js` : interface (vues, Cover Flow, lecteur, file d'attente)
 - `public/search.js` : moteur de recherche (fautes de frappe, sigles, décennies, genres, pays)
 - `public/mixes.js` : sélections (classiques, playlists par style et par décennie)
 - `public/keynav.js` : navigation spatiale au clavier et à la télécommande
-- `public/voice.js` : capture du micro et détection de fin de phrase
 - `public/glass.js` : effet de verre liquide du lecteur (réfraction, dispersion)
 - `public/remote-panel.js` : panneau « Télécommande » de l'ordinateur (QR code, appareils, réseau de la maison)
 - `public/m/` : l'app du téléphone (`npm run make-phone-icons` régénère ses icônes)
 - `lib/remote.js` : association, clés d'appareil, réseau de la maison, canal en direct téléphone ↔ ordinateur
 - `lib/system.js` : tout ce qui dépend du système (réseau, anti-veille, ouverture du navigateur), macOS et Linux
 - `lib/qr.js` : QR code fabriqué localement
-- `scripts/` : lanceur, création de l'app, reconnaissance vocale, captures d'écran
+- `scripts/` : lanceur, création de l'app, captures d'écran
 - `tests/` : batterie de tests et générateur de bibliothèque factice
 
 Variables utiles :

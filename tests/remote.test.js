@@ -81,7 +81,7 @@ test('depuis le réseau, sans clé : seulement la page d’association', async (
   assert.equal((await lan('/api/library')).status, 401);
   assert.equal((await lan('/api/remote/events')).status, 401);
   assert.deepEqual(await lan('/api/remote/whoami').then((r) => r.json()).then((w) => w.paired), false);
-  for (const p of ['/index.html', '/app.js', '/api/setup', '/api/status', '/api/lossy.csv', '/api/remote/admin', '/audio/abc', '/api/voice/status']) assert.equal((await lan(p)).status, 403, p);
+  for (const p of ['/index.html', '/app.js', '/api/setup', '/api/status', '/api/lossy.csv', '/api/remote/admin', '/audio/abc']) assert.equal((await lan(p)).status, 403, p);
 });
 
 test('code faux refusé, bon code accepté une seule fois, clé d’appareil en cookie', async () => {

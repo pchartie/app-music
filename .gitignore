@@ -1,5 +1,4 @@
 node_modules/
 cache/
 .DS_Store
-tools/
 config.json

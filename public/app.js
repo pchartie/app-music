@@ -1,7 +1,6 @@
 // App Music — interface
 import { buildIndex, search as runSearch } from './search.js';
 import * as nav from './keynav.js';
-import { listen, voiceAvailable } from './voice.js';
 import { liquidGlass } from './glass.js';
 import { buildMixes, byArtistYear } from './mixes.js';
 import { openRemotePanel } from './remote-panel.js';
@@ -732,8 +731,7 @@ function viewSearch(q) {
   if ($('#search').value !== q && document.activeElement !== $('#search')) $('#search').value = q;
   if (!q.trim()) {
     view.innerHTML = `<div class="page search-page"><div class="page-head"><div><h1>Rechercher</h1>
-      <p class="muted search-tip">Un artiste, un style, une année, une décennie… quelques lettres suffisent.</p></div>
-      <button class="btn soft voice-cta" data-voice>${MIC} Recherche vocale</button></div>${browseHTML()}</div>`;
+      <p class="muted search-tip">Un artiste, un style, une année, une décennie… quelques lettres suffisent.</p></div></div>${browseHTML()}</div>`;
     tintTiles();
     return;
   }
@@ -784,56 +782,6 @@ $('#search').addEventListener('keydown', (e) => {
   if (e.key === 'Enter') { e.preventDefault(); pendingPlay = /^(joue|lance|mets|ecoute|écoute)\b/i.test(e.target.value.trim()); if (pendingPlay) route(); const first = $('#view [tabindex="0"], #view [data-album], #view [data-artist], #view button'); first && nav.focusEl(first); }
   if (e.key === 'ArrowDown') { e.preventDefault(); nav.defaultFocus(); }
 });
-
-// ---------- Commande vocale ----------
-const MIC = '<svg viewBox="0 0 24 24" width="15" height="15"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
-let voiceReady = false, voiceCtl = null;
-voiceAvailable().then((ok) => { voiceReady = ok; $('#mic').classList.toggle('off', !ok); if (!ok) $('#mic').title = 'Recherche vocale : à installer (npm run install-voice)'; });
-async function startVoice() {
-  if (voiceCtl) return;
-  if (!voiceReady) { toast('Recherche vocale non installée : lancez « npm run install-voice » dans ~/AppMusic'); return; }
-  const box = $('#voice'), state = $('#voice-state'), orb = $('#voice-orb');
-  box.classList.add('open'); box.classList.remove('thinking'); box.setAttribute('aria-hidden', 'false');
-  state.textContent = 'Je vous écoute…'; $('#voice-hint').style.visibility = '';
-  nav.focusEl($('#voice-cancel'));
-  voiceCtl = new AbortController();
-  try {
-    const text = await listen({
-      signal: voiceCtl.signal,
-      onLevel: (l) => orb.style.setProperty('--l', l.toFixed(2)),
-      onState: (s) => { if (s === 'thinking') { box.classList.add('thinking'); state.textContent = 'Un instant…'; orb.style.setProperty('--l', 0); } },
-    });
-    if (!text) throw new Error('Je n’ai pas compris');
-    state.textContent = `« ${text} »`; $('#voice-hint').style.visibility = 'hidden';
-    await new Promise((r) => setTimeout(r, 650));
-    stopVoice();
-    const intent = voiceIntent(text);
-    pendingPlay = intent.play;
-    setSearch(intent.q);
-  } catch (err) {
-    if (err.name === 'AbortError') return stopVoice();
-    box.classList.remove('thinking');
-    state.textContent = err.message === 'not-installed' ? 'Recherche vocale non installée' : err.name === 'NotAllowedError' ? 'Micro non autorisé' : err.message;
-    setTimeout(stopVoice, 1800);
-  } finally { voiceCtl = null; }
-}
-// « joue Renaud » est parfois entendu « jo Renaud » : on reconnaît l'intention de lecture avec tolérance,
-// sauf si le début de la phrase est un vrai nom d'artiste (« Joe Bonamassa »).
-function voiceIntent(text) {
-  const t = text.trim();
-  const strict = /^(jou(e|es|ez|er)|lance[rz]?|mets|mettre|met|[ée]coute[rz]?|play)\s+/i;
-  if (strict.test(t)) return { play: true, q: 'joue ' + t.replace(strict, '') };
-  const loose = /^(jo|joe|jou|joué|jouet|joues)\s+/i;
-  if (loose.test(t)) {
-    const n = norm(t).split(/\s+/).slice(0, 2).join(' ');
-    if (!LIB.artists.some((a) => norm(a.name).startsWith(n))) return { play: true, q: 'joue ' + t.replace(loose, '') };
-  }
-  return { play: false, q: t };
-}
-function stopVoice() { voiceCtl?.abort(); voiceCtl = null; const box = $('#voice'); box.classList.remove('open', 'thinking'); box.setAttribute('aria-hidden', 'true'); }
-$('#mic').addEventListener('click', (e) => { e.preventDefault(); startVoice(); });
-$('#voice-cancel').onclick = stopVoice;
-view.addEventListener('click', (e) => { if (e.target.closest('[data-voice]')) startVoice(); });
 
 // Depuis une grille : la pochette cliquée se transforme en grande pochette de la page album
 function openFromCard(card) {
@@ -1112,11 +1060,10 @@ np.addEventListener('pointermove', (e) => {
 
 // ---------- Clavier et télécommande ----------
 // Flèches : se déplacer · OK/Entrée : valider · Retour/Échap : revenir · Espace/⏯ : lecture/pause
-// Lettres : commencer une recherche · Ctrl+M : recherche vocale
+// Lettres : commencer une recherche
 const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
 function goBack() {
   if ($('#remote').classList.contains('open')) return $('#rm-close')?.click();
-  if ($('#voice').classList.contains('open')) return stopVoice();
   if ($('#queue').classList.contains('open')) { $('#q-close').click(); return nav.focusEl($('#b-queue')); }
   if (np.classList.contains('open')) { closeNP(); return nav.focusEl($('#p-now')); }
   if (/^#\/?(album|artist|selection|mp3)/.test(location.hash)) return navigateBack();
@@ -1135,7 +1082,6 @@ window.addEventListener('keydown', (e) => {
   if (k === 'MediaTrackNext') return player.next(false);
   if (k === 'MediaTrackPrevious') return player.prev();
   if (k === 'MediaStop') return audio.pause();
-  if (e.ctrlKey && k.toLowerCase() === 'm') { e.preventDefault(); return startVoice(); }
   if ((e.metaKey || e.ctrlKey) && k === 'f') { e.preventDefault(); return $('#search').focus(); }
   if ((e.metaKey || e.ctrlKey) && k === 'ArrowRight') return player.next(false);
   if ((e.metaKey || e.ctrlKey) && k === 'ArrowLeft') return player.prev();
