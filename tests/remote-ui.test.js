@@ -171,6 +171,10 @@ test('retirer le téléphone depuis l’ordinateur : il revient à l’écran d�
   await mac.click('#remote-btn');
   await mac.waitForSelector('[data-revoke]');
   await mac.click('[data-revoke]');
+  await sleep(600);
+  assert.match(await mac.textContent('[data-revoke]'), /Confirmer/, 'un seul clic ne retire rien');
+  assert.equal((await srv.api('/api/remote/admin')).body.devices.length, 1);
+  await mac.click('[data-revoke]');
   await mac.waitForFunction(() => !document.querySelector('[data-revoke]'));
   await phone.waitForSelector('.screen h2', { timeout: 10000 });
   assert.match(await phone.textContent('.screen'), /retiré/);

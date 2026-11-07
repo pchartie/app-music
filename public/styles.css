@@ -741,4 +741,5 @@ body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p
 .rm-row .ic { background: linear-gradient(160deg, #5ac8fa, #0a84ff); }
 .rm-row .ic.home { background: linear-gradient(160deg, #63e6a0, #1f9d55); }
 .rm-on { color: #30d158; }
+.rm-row .btn.confirm { background: var(--accent); color: #fff; }
 .keys .rm-row .btn:focus-visible, .keys #rm-close:focus-visible, .keys #rm-new:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, .7); }

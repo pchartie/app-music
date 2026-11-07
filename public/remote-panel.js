@@ -115,6 +115,12 @@ export function openRemotePanel({ onClose } = {}) {
     const t = e.target.closest('button'); if (!t) return;
     if (t.id === 'rm-close') return close();
     if (t.id === 'rm-pair' || t.id === 'rm-new') return pair();
+    // retirer / oublier : il faut confirmer d'un second clic (un clic égaré ne coupe plus la télécommande)
+    if ((t.dataset.revoke || t.dataset.forget) && !t.classList.contains('confirm')) {
+      t.classList.add('confirm'); t.dataset.label = t.textContent; t.textContent = 'Confirmer ?';
+      clearTimeout(t._undo); t._undo = setTimeout(() => { t.classList.remove('confirm'); t.textContent = t.dataset.label; }, 4000);
+      return;
+    }
     if (t.dataset.revoke) { await post(`/api/remote/devices/${encodeURIComponent(t.dataset.revoke)}/revoke`); flash = ''; return refresh(); }
     if (t.dataset.forget) { await post(`/api/remote/homes/${encodeURIComponent(t.dataset.forget)}/forget`); return refresh(); }
   };
