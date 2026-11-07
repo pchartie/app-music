@@ -43,4 +43,8 @@ npm run install-voice             # optionnel : reconnaissance vocale (whisper.c
 3. **NAS, écoute hors de la maison** : accès via Tailscale (pas d'exposition Internet), transcodage à la volée
    en AAC/Opus pour la 4G (sans toucher aux FLAC).
 
-Prochaine étape attendue : l'étape 1 ; l'utilisateur doit choisir la priorité entre « son sur le téléphone » et « télécommande ».
+Étape 1, choix tranchés le 2026-11-07 : **télécommande d'abord** (le Mac joue, le téléphone pilote), un seul utilisateur
+(pas de mode invité), accès réseau ouvert en permanence mais chaque appel du téléphone exige une clé d'appareil obtenue
+en scannant un QR code affiché sur le Mac (code à usage unique, quelques minutes), appareils révocables ; actions
+d'administration (dossier, réindexation) réservées au Mac ; empêcher la veille du Mac pendant le pilotage ; téléphone Android
+(Chrome). Phases : socle réseau + clés → appairage QR → interface mobile → télécommande → (plus tard) son sur le téléphone, HTTPS.
