@@ -1,23 +1,49 @@
 // Sélections : les classiques ★, et des playlists toutes prêtes par style et par décennie.
 // Module sans dépendance au navigateur (testé dans tests/mixes.test.js).
 
-// Familles de styles : repérées dans les genres de l'album (tag, MusicBrainz, Deezer) et les principales étiquettes de l'artiste.
+// Familles de styles (ordre d'affichage). Chaque album est rangé dans son style principal (et un second s'il pèse
+// presque autant) : on ne se contente plus d'un mot trouvé dans une étiquette (« blues rock » n'est pas du blues).
 export const MIX_STYLES = [
-  ['rock', 'Rock', /\b(rock|grunge|garage|indie|alternati\w*|britpop|post punk)\b/],
-  ['hard-rock', 'Hard rock', /\b(hard rock|glam|arena rock|aor)\b/],
-  ['metal', 'Metal', /\b(metal\w*|nwobhm|harte|djent|thrash|doom|grindcore)\b/],
-  ['punk', 'Punk', /\bpunk\b/],
-  ['pop', 'Pop', /\b(pop|variete\w*|dance|synth pop|synthpop|new wave)\b/, /\b(pop (rock|punk|rap|metal)|(folk|power) pop)\b/g],
-  ['rap', 'Rap & hip-hop', /\b(rap|hip hop|hiphop|trap|grime)\b/],
-  ['chanson', 'Chanson française', /\bchanson\b/],
-  ['soul', 'Soul, funk & R&B', /\b(soul|funk|r b|rnb|rhythm and blues|motown|disco)\b/],
-  ['blues', 'Blues', /\bblues\b/],
-  ['jazz', 'Jazz', /\b(jazz|swing|bebop|bossa nova)\b/],
-  ['electro', 'Électro', /\b(electro\w*|house|techno|trance|edm|ambient|downtempo|trip hop)\b/],
-  ['folk', 'Folk & acoustique', /\b(folk|acoustic|celtic|singer songwriter|country|americana)\b/],
-  ['classique', 'Classique & musiques de film', /\b(classical|classique|orchestral|opera|soundtrack|score|films?|games|epic|baroque|piano)\b/],
-  ['reggae', 'Reggae', /\b(reggae|ska|dub|dancehall)\b/],
+  ['rock', 'Rock'], ['hard-rock', 'Hard rock'], ['metal', 'Metal'], ['punk', 'Punk'], ['pop', 'Pop'], ['rap', 'Rap & hip-hop'],
+  ['chanson', 'Chanson française'], ['soul', 'Soul, funk & R&B'], ['blues', 'Blues'], ['jazz', 'Jazz'], ['electro', 'Électro'],
+  ['folk', 'Folk & acoustique'], ['classique', 'Classique & musiques de film'], ['reggae', 'Reggae'],
 ];
+// étiquettes composées reconnues telles quelles (avant la règle du dernier mot)
+const WHOLE = [
+  [/\b(hip hop|hiphop|g funk)\b/, 'rap'], [/\btrip hop\b/, 'electro'], [/\b(r b|rnb|rhythm and blues)\b/, 'soul'],
+  [/\b(hard rock|arena rock|glam( rock| metal)?|aor)\b/, 'hard-rock'], [/\brock opera\b/, 'rock'], [/\bfolk pop\b/, 'folk'], [/\bpower pop\b/, 'rock'],
+  [/\b(chanson|variete francaise)\b/, 'chanson'], [/\b(singer songwriter|bossa nova)\b/, (t) => (/bossa/.test(t) ? 'jazz' : 'folk')],
+  [/\b(soundtrack|score|films?|games|trailer|production music|musique de film)\b/, 'classique'], [/\bnew wave\b/, 'pop'], [/\bneue deutsche harte\b/, 'metal'],
+];
+// sinon le dernier mot connu décide : « blues rock » → rock, « funk metal » → metal, « pop soul » → soul, « dance pop » → pop
+const WORD = {
+  rock: 'rock', grunge: 'rock', garage: 'rock', indie: 'rock', alternative: 'rock', britpop: 'rock', psychedelic: 'rock',
+  metal: 'metal', metalcore: 'metal', thrash: 'metal', doom: 'metal', djent: 'metal', grindcore: 'metal', nwobhm: 'metal',
+  punk: 'punk', pop: 'pop', synthpop: 'pop', electropop: 'pop', variete: 'pop', latin: 'pop',
+  rap: 'rap', trap: 'rap', grime: 'rap', soul: 'soul', funk: 'soul', motown: 'soul', disco: 'soul',
+  blues: 'blues', jazz: 'jazz', swing: 'jazz', bebop: 'jazz',
+  electro: 'electro', electronic: 'electro', electronica: 'electro', house: 'electro', techno: 'electro', trance: 'electro', edm: 'electro',
+  ambient: 'electro', downtempo: 'electro', dubstep: 'electro', breakbeat: 'electro', dance: 'electro',
+  folk: 'folk', acoustic: 'folk', celtic: 'folk', country: 'folk', americana: 'folk',
+  classical: 'classique', classique: 'classique', orchestral: 'classique', opera: 'classique', baroque: 'classique', piano: 'classique', epic: 'classique',
+  reggae: 'reggae', ska: 'reggae', dub: 'reggae', dancehall: 'reggae',
+};
+export function tagFamily(tag) {
+  const t = ' ' + normTxt(tag).trim() + ' ';
+  for (const [re, f] of WHOLE) if (re.test(t)) return typeof f === 'function' ? f(t) : f;
+  const words = t.trim().split(' ');
+  for (let i = words.length - 1; i >= 0; i--) if (WORD[words[i]]) return WORD[words[i]];
+  return null;
+}
+// poids des styles d'un album : genre du tag (le plus fiable), genres trouvés en ligne, étiquettes de l'artiste ; les premiers comptent plus
+function albumScores(a, artistTags) {
+  const sc = new Map();
+  const addTag = (tag, w) => { const f = tagFamily(tag); if (!f) return; sc.set(f, (sc.get(f) || 0) + w); if (f === 'hard-rock') sc.set('rock', (sc.get('rock') || 0) + w * 0.6); };
+  String(a.genre || '').split(/[,;/]/).map((x) => x.trim()).filter((x) => x && !/^\d+$/.test(x)).forEach((g, i) => addTag(g, 3 / (i + 1)));
+  (a.genres || []).slice(0, 5).forEach((g, i) => addTag(g, [2, 1.5, 1, 0.7, 0.5][i]));
+  (artistTags || []).slice(0, 3).forEach((g, i) => addTag(g, [2, 1.3, 1][i]));
+  return sc;
+}
 const normTxt = (x) => String(x ?? '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, ' ');
 export const yearOf = (a) => a.year || (a.firstRelease ? +a.firstRelease.slice(0, 4) : null);
 export const byArtistYear = (a, b) => a.artist.localeCompare(b.artist, 'fr') || (yearOf(a) || 0) - (yearOf(b) || 0);
@@ -35,10 +61,19 @@ export function buildMixes(LIB) {
   add('classiques', 'Les classiques', 'classics', 'Les titres les plus célèbres de votre bibliothèque, du plus connu au moins connu.', hitAlbums, hits.map((t) => t.id));
   // par style : au moins 2 albums et 20 titres
   const R2 = new Map(LIB.artists.map((a) => [a.id, a]));
-  const text = new Map(LIB.albums.map((a) => [a.id, ' ' + normTxt([a.genre, ...(a.genres || []), ...(R2.get(a.artistId)?.tags || []).slice(0, 3)].join(' ')) + ' ']));
-  for (const [key, title, re, not] of MIX_STYLES) {
-    // « not » : étiquettes composées qui ne comptent pas pour ce style (« pop rock » n'est pas de la pop)
-    const albums = LIB.albums.filter((a) => re.test(not ? text.get(a.id).replace(not, ' ') : text.get(a.id))).sort(byArtistYear);
+  const own = new Map(LIB.albums.map((a) => [a.id, albumScores(a, R2.get(a.artistId)?.tags)]));
+  const fams = new Map();
+  for (const a of LIB.albums) {
+    // les autres albums de l'artiste corrigent une étiquette isolée et fausse (un album de rock étiqueté « jazz »)
+    const sc = new Map(own.get(a.id));
+    for (const b of LIB.albums) if (b !== a && b.artistId === a.artistId) for (const [f, w] of own.get(b.id)) sc.set(f, (sc.get(f) || 0) + w * 0.5);
+    const top = Math.max(0, ...sc.values());
+    const keep = new Set([...sc].filter(([, w]) => top > 0 && w >= top * 0.5).map(([f]) => f));
+    // la chanson française prime : Renaud reste dans « Chanson française », pas aussi dans Pop et Rock
+    fams.set(a.id, keep.has('chanson') ? new Set(['chanson']) : keep);
+  }
+  for (const [key, title] of MIX_STYLES) {
+    const albums = LIB.albums.filter((a) => fams.get(a.id).has(key)).sort(byArtistYear);
     const ids = albums.flatMap((a) => a.tracks);
     if (albums.length >= 2 && ids.length >= 20) add(key, title, 'style', `Tous les albums ${title.toLowerCase().startsWith('chanson') ? 'de chanson française' : `« ${title} »`} de votre bibliothèque.`, albums, ids);
   }

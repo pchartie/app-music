@@ -86,3 +86,42 @@ test('bannière des classiques : toujours 6 pochettes, complétées par d’autr
   assert.equal(c.cover.length, 6);
   assert.equal(c.cover[0].id, 'hit', 'l’album du classique en premier');
 });
+
+test('style principal : le dernier mot d’une étiquette décide (« blues rock » est du rock)', () => {
+  const twelve = (id, artist, genres, artistTags = []) => [id, artist, 1990, null, 12, { genres, artistTags }];
+  const m = buildMixes(library([
+    twelve('b1', 'Bluesman', ['blues', 'electric blues']), twelve('b2', 'Bluesette', ['blues']),
+    twelve('br', 'Rockeur', ['blues rock', 'hard rock', 'rock']), // pas du blues
+    twelve('fm', 'Fusion', ['funk metal', 'rap metal']), // pas de la soul
+    twelve('ro', 'Opéra', ['rock opera']), // pas du classique
+    twelve('c1', 'Orchestre', ['classical', 'orchestral']), twelve('c2', 'Bande originale', ['soundtrack']),
+    twelve('ep', 'Chanteuse', ['electropop', 'dance-pop']), twelve('p2', 'Chanteur', ['pop']), // de la pop, pas de l'électro
+    twelve('e1', 'DJ', ['house', 'edm']), twelve('e2', 'Ambiance', ['downtempo', 'trip hop']),
+  ]));
+  const ids = (k) => m.get(k)?.albums.map((a) => a.id).sort() ?? [];
+  assert.deepEqual(ids('blues'), ['b1', 'b2']);
+  assert.ok(!ids('soul').includes('fm'));
+  assert.deepEqual(ids('classique'), ['c1', 'c2']);
+  assert.deepEqual(ids('electro'), ['e1', 'e2']);
+  assert.deepEqual(ids('pop'), ['ep', 'p2']);
+});
+
+test('une étiquette isolée et fausse est corrigée par les autres albums de l’artiste', () => {
+  const m = buildMixes(library([
+    ['x1', 'Groupe', 1996, null, 12, { genres: ['jazz'] }], // mal étiqueté
+    ['x2', 'Groupe', 2000, 'Rock', 12, { genres: ['alternative rock', 'rock'] }], ['x3', 'Groupe', 2003, 'Rock', 12, { genres: ['alternative rock'] }],
+    ['j1', 'Trio', 1960, 'Jazz', 12, { genres: ['jazz', 'bebop'] }],
+  ]));
+  assert.ok(!m.has('jazz'), 'un seul vrai album de jazz : pas de playlist « Jazz »');
+  assert.deepEqual(m.get('rock').albums.map((a) => a.id), ['x1', 'x2', 'x3']);
+});
+
+test('chanson française : l’album y reste seul, pas aussi dans Pop et Rock', () => {
+  const m = buildMixes(library([
+    ['f1', 'Chanteur', 1980, 'Pop', 12, { genres: ['pop', 'rock'], artistTags: ['french', 'chanson française'] }],
+    ['f2', 'Chanteur', 1983, 'Chanson', 12, { genres: ['chanson française', 'rock'], artistTags: ['french', 'chanson française'] }],
+    ['p1', 'Popstar', 1990, 'Pop', 12], ['p2', 'Idole', 1991, 'Pop', 12], ['r1', 'Rockband', 1992, 'Rock', 12], ['r2', 'Garage', 1993, 'Rock', 12],
+  ]));
+  assert.deepEqual(m.get('chanson').albums.map((a) => a.id), ['f1', 'f2']);
+  assert.ok(!m.get('pop').albums.some((a) => a.artist === 'Chanteur') && !m.get('rock').albums.some((a) => a.artist === 'Chanteur'));
+});
