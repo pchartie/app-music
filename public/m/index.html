@@ -30,6 +30,14 @@
     <button class="icon small" id="mini-queue" aria-label="À suivre"><svg viewBox="0 0 24 24"><path d="M4 6h12M4 11h12M4 16h7" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/><path d="M15 14.5v6l5-3z" fill="currentColor"/></svg></button>
   </div>
 
+  <div class="minivol" id="minivol" hidden role="group" aria-label="Volume">
+    <button class="vol-step" data-step="-1" aria-label="Moins fort"><svg viewBox="0 0 24 24"><path d="M6 12h12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+    <div class="vol-bar drag" id="vol-drag"><i></i><b></b></div>
+    <span class="vol-pct">–</span>
+    <button class="vol-step" data-step="1" aria-label="Plus fort"><svg viewBox="0 0 24 24"><path d="M12 6v12M6 12h12" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"/></svg></button>
+  </div>
+  <div class="vol-flash" id="vol-flash"></div>
+
   <nav class="tabs" id="tabs">
     <a href="#albums" data-tab="albums"><svg viewBox="0 0 24 24"><rect x="3" y="3" width="8" height="8" rx="2" fill="currentColor"/><rect x="13" y="3" width="8" height="8" rx="2" fill="currentColor"/><rect x="3" y="13" width="8" height="8" rx="2" fill="currentColor"/><rect x="13" y="13" width="8" height="8" rx="2" fill="currentColor"/></svg>Albums</a>
     <a href="#artists" data-tab="artists"><svg viewBox="0 0 24 24"><rect x="8.6" y="2.4" width="6.8" height="11.6" rx="3.4" fill="currentColor"/><path d="M5.6 10.8a6.4 6.4 0 0 0 12.8 0M12 17.2v3.6M8.6 20.8h6.8" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg>Artistes</a>
@@ -52,7 +60,11 @@
         <button class="icon" data-cmd="next" aria-label="Suivant"><svg viewBox="0 0 24 24"><path d="M12.5 12 3 5.5v13zM21.5 12 12 5.5v13z" fill="currentColor"/></svg></button>
         <button class="icon small" data-cmd="repeat" id="np-repeat" aria-label="Répéter"><svg viewBox="0 0 24 24"><path d="M4 11V9.5A3.5 3.5 0 0 1 7.5 6H19m-3-3 3 3-3 3M20 13v1.5a3.5 3.5 0 0 1-3.5 3.5H5m3 3-3-3 3-3" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span class="one">1</span></button>
       </div>
-      <label class="volume"><svg viewBox="0 0 24 24"><path d="M3 9.5h3.5L11 5.5v13l-4.5-4H3z" fill="currentColor"/></svg><input type="range" id="volume" min="0" max="100" step="1" aria-label="Volume"><svg viewBox="0 0 24 24"><path d="M3 9.5h3.5L11 5.5v13l-4.5-4H3z" fill="currentColor"/><path d="M14.5 8.8a4.5 4.5 0 0 1 0 6.4M17 6.3a8 8 0 0 1 0 11.4" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></label>
+      <div class="rocker" role="group" aria-label="Volume">
+        <button class="vol-step" data-step="-1" aria-label="Moins fort"><svg viewBox="0 0 24 24"><path d="M3 9.5h3.5L11 5.5v13l-4.5-4H3z" fill="currentColor"/><path d="M15 12h6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+        <div class="rocker-mid"><span class="vol-pct">–</span><span class="vol-bar"><i></i></span></div>
+        <button class="vol-step" data-step="1" aria-label="Plus fort"><svg viewBox="0 0 24 24"><path d="M3 9.5h3.5L11 5.5v13l-4.5-4H3z" fill="currentColor"/><path d="M18 9v6M15 12h6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>
+      </div>
       <div class="q-head"><h2>À suivre</h2><button class="link" id="q-clear" hidden>Vider</button></div>
       <div class="queue" id="queue"></div>
     </div>

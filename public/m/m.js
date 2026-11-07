@@ -130,7 +130,7 @@ document.addEventListener('visibilitychange', () => { if (document.visibilitySta
 // ---------- Lecteur (mini barre et plein écran) ----------
 function renderPlayer() {
   const t = S?.current && T.get(S.current);
-  $('#mini').hidden = !t;
+  $('#mini').hidden = $('#minivol').hidden = !t;
   document.body.classList.toggle('has-track', !!t);
   document.body.classList.toggle('playing', !!S?.playing);
   if (!t) { if ($('#np').classList.contains('open')) closeNP(); showBanner(); return; }
@@ -140,7 +140,7 @@ function renderPlayer() {
   $('#np-artist').textContent = t.artist; $('#np-artist').href = `#artist/${t.artistId}`;
   $('#np-shuffle').classList.toggle('on', !!S.shuffle);
   $('#np-repeat').classList.toggle('on', S.repeat !== 'off'); $('#np-repeat').classList.toggle('one', S.repeat === 'one');
-  if (!volumeDragging) $('#volume').value = Math.round((S.volume ?? 1) * 100);
+  if (Date.now() > volUntil && typeof S.volume === 'number') { vol = S.volume; showVolume(); }
   tick(); renderQueue(); showBanner();
 }
 function tick() {
@@ -201,13 +201,44 @@ seekEl.addEventListener('pointerdown', (e) => {
   const up = (ev) => { seekEl.removeEventListener('pointermove', mv); seekEl.removeEventListener('pointerup', up); seekEl.removeEventListener('pointercancel', up); seekEl.classList.remove('drag'); seeking = false; if (d) cmd('seek', { position: frac(ev) * d }); };
   seekEl.addEventListener('pointermove', mv); seekEl.addEventListener('pointerup', up); seekEl.addEventListener('pointercancel', up);
 });
-// volume : envoi régulier pendant le glissement
-let volumeDragging = false, volTimer = null;
-$('#volume').addEventListener('input', (e) => {
-  volumeDragging = true;
-  if (!volTimer) volTimer = setTimeout(() => { volTimer = null; cmd('volume', { value: +$('#volume').value / 100 }); }, 120);
+// ---------- Volume de l'ordinateur ----------
+// Ligne sous le mini-lecteur (toutes les pages) et bascule − / + dans l'écran de lecture.
+// Chaque appui : ±5 % ; appui long : le volume continue ; la fine barre se glisse pour un grand écart.
+let vol = null, volUntil = 0, volTimer = null;
+function showVolume() {
+  if (vol === null) return;
+  const pct = Math.round(vol * 100);
+  $$('.vol-pct').forEach((el) => (el.textContent = pct + ' %'));
+  $$('.vol-bar').forEach((el) => el.style.setProperty('--v', pct + '%'));
+}
+function setVolume(v, flash = true) {
+  vol = Math.max(0, Math.min(1, Math.round(v * 100) / 100));
+  volUntil = Date.now() + 1500; // l'état renvoyé par l'ordinateur ne doit pas faire sauter la barre pendant le réglage
+  showVolume();
+  if (flash) { const f = $('#vol-flash'); f.textContent = `Volume ${Math.round(vol * 100)} %`; f.classList.add('show'); clearTimeout(f.t); f.t = setTimeout(() => f.classList.remove('show'), 900); }
+  if (!volTimer) volTimer = setTimeout(() => { volTimer = null; cmd('volume', { value: vol }); }, 100);
+}
+$$('.vol-step').forEach((b) => {
+  const d = +b.dataset.step * 0.05;
+  let hold, rep;
+  const stop = () => { clearTimeout(hold); clearInterval(rep); b.classList.remove('hit'); };
+  b.addEventListener('pointerdown', (e) => {
+    e.preventDefault(); b.classList.add('hit');
+    setVolume((vol ?? 1) + d);
+    hold = setTimeout(() => (rep = setInterval(() => setVolume(vol + d), 150)), 450);
+  });
+  for (const ev of ['pointerup', 'pointerleave', 'pointercancel']) b.addEventListener(ev, stop);
+  b.addEventListener('contextmenu', (e) => e.preventDefault()); // appui long : pas de menu
 });
-$('#volume').addEventListener('change', () => { clearTimeout(volTimer); volTimer = null; volumeDragging = false; cmd('volume', { value: +$('#volume').value / 100 }); });
+const volDrag = $('#vol-drag');
+volDrag.addEventListener('pointerdown', (e) => {
+  volDrag.setPointerCapture(e.pointerId);
+  const at = (ev) => { const r = volDrag.getBoundingClientRect(); return (ev.clientX - r.left) / r.width; };
+  setVolume(at(e), false);
+  const mv = (ev) => setVolume(at(ev), false);
+  const up = () => { volDrag.removeEventListener('pointermove', mv); volDrag.removeEventListener('pointerup', up); volDrag.removeEventListener('pointercancel', up); };
+  volDrag.addEventListener('pointermove', mv); volDrag.addEventListener('pointerup', up); volDrag.addEventListener('pointercancel', up);
+});
 
 // ---------- Pages ----------
 const view = $('#view');

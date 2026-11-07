@@ -117,8 +117,20 @@ test('pause, suivant, volume et position depuis le téléphone', { skip: !execut
   await phone.tap('#mini-open');
   await phone.waitForSelector('#np.open');
   await phone.waitForFunction(() => getComputedStyle(document.querySelector('#np')).transform === 'none'); // fin de la montée du panneau
-  await phone.$eval('#volume', (el) => { el.value = 25; el.dispatchEvent(new Event('input')); el.dispatchEvent(new Event('change')); });
-  await waitMac(() => getComputedStyle(document.querySelector('#volume')).getPropertyValue('--v').trim() === '0.25');
+  // volume : bascule − / + de l'écran de lecture (5 % par appui), appui long, puis ligne sous le mini-lecteur
+  const macVol = () => mac.evaluate(() => +getComputedStyle(document.querySelector('#volume')).getPropertyValue('--v'));
+  const start = await macVol();
+  await phone.tap('.rocker [data-step="-1"]');
+  await phone.tap('.rocker [data-step="-1"]');
+  await waitMac((v) => Math.abs(+getComputedStyle(document.querySelector('#volume')).getPropertyValue('--v') - v) < 0.001, Math.round((start - 0.1) * 100) / 100);
+  assert.match(await phone.textContent('#vol-flash'), new RegExp(`Volume ${Math.round((start - 0.1) * 100)} %`));
+  assert.equal(await phone.textContent('.rocker .vol-pct'), `${Math.round((start - 0.1) * 100)} %`);
+  const plus = await phone.$eval('.rocker [data-step="1"]', (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
+  const before = await macVol();
+  await phone.mouse.move(plus.x, plus.y); await phone.mouse.down(); await sleep(1100); await phone.mouse.up();
+  await sleep(400);
+  assert.ok(await macVol() >= before + 0.15, `appui long : le volume continue de monter (${before} → ${await macVol()})`);
+
   const box = await phone.$eval('#seek', (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width / 2, y: r.top + r.height / 2 }; });
   await phone.touchscreen.tap(box.x, box.y);
   await mac.waitForFunction(() => parseFloat(document.querySelector('#t-cur').textContent.split(':')[0]) * 60 + parseFloat(document.querySelector('#t-cur').textContent.split(':')[1]) >= 55, null, { timeout: 8000 });
@@ -129,6 +141,13 @@ test('« À suivre » : ajout depuis le téléphone, saut et retrait', { skip: !
   const finalTitle = 'Final (Marée Haute)';
   await phone.tap('#np-close');
   await phone.waitForSelector('#np:not(.open)', { state: 'attached' });
+  // ligne de volume sous le mini-lecteur : on touche la fine barre au quart
+  await phone.waitForSelector('#minivol');
+  const bar = await phone.$eval('#vol-drag', (el) => { const r = el.getBoundingClientRect(); return { x: r.left + r.width * 0.25, y: r.top + r.height / 2 }; });
+  await phone.touchscreen.tap(bar.x, bar.y);
+  await waitMac(() => Math.abs(+getComputedStyle(document.querySelector('#volume')).getPropertyValue('--v') - 0.25) < 0.02);
+  await phone.tap('#minivol [data-step="1"]');
+  await waitMac(() => Math.abs(+getComputedStyle(document.querySelector('#volume')).getPropertyValue('--v') - 0.3) < 0.02);
   await phone.goto(`http://127.0.0.1:${lanPort}/m/#album/${other.id}`);
   await phone.waitForSelector('.tracks .tr');
   await phone.tap(`.tr[data-track="${other.tracks[2]}"] [data-add]`);
