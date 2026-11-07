@@ -334,7 +334,7 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .p-next-meta { min-width: 0; flex: 1; line-height: 1.25; }
 .p-next-meta small { display: block; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
 .p-next-meta b { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.p-next.empty b { color: var(--text-2); font-weight: 500; }
+.p-next.is-end b { color: var(--text-2); font-weight: 500; }
 @media (max-width: 1250px) { .p-next-meta, .p-next img, #p-format { display: none; } .p-next { background: none; padding: 0; } }
 #p-format:empty { display: none; }
 

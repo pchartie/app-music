@@ -88,6 +88,15 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     await page.click('#p-next-title');
     await page.waitForFunction(() => document.querySelector('#queue').classList.contains('open'));
     await page.click('#q-close');
+    // dernier titre : « Fin de la file », et la carte ne déforme pas le lecteur (régression : classe .empty globale)
+    await go(`#/album/${album('Nuit Blanche').id}`, '.tracklist tr[data-track]');
+    await page.click('.tracklist tr[data-track]:last-of-type');
+    await page.waitForFunction(() => document.querySelector('#p-title').textContent === 'Aube');
+    assert.equal(await page.textContent('#p-next-title'), 'Fin de la file');
+    const [pl, card] = await Promise.all(['#player', '#p-next'].map(async (s) => (await page.$(s)).boundingBox()));
+    assert.ok(card.height < 60 && card.y > pl.y && card.y + card.height < pl.y + pl.height, `carte hors du lecteur : ${JSON.stringify(card)}`);
+    await page.click('#b-play');
+    await page.waitForFunction(() => document.body.classList.contains('paused'));
   });
 
   test('« À suivre » : glisser un titre, un album, réorganiser, vider, garder au rechargement', async () => {

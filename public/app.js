@@ -952,7 +952,7 @@ if ('mediaSession' in navigator) {
 function renderNext() {
   const nextPos = player.pos + 1 < player.order.length ? player.pos + 1 : player.repeat === 'all' && player.order.length > 1 ? 0 : -1;
   const t = nextPos >= 0 ? T.get(player.queue[player.order[nextPos]]) : null;
-  $('#p-next').classList.toggle('empty', !t);
+  $('#p-next').classList.toggle('is-end', !t);
   $('#p-next-title').textContent = t ? t.title : player.queue.length ? 'Fin de la file' : 'Rien en attente';
   $('#p-next-title').title = t ? `${t.title} — ${t.artist}` : '';
   const img = $('#p-next-cover'); if (t) img.src = cover(t.albumId); else img.removeAttribute('src');
