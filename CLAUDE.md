@@ -53,4 +53,5 @@ avec un équivalent Linux (`systemd-inhibit`, `xdg-open`…).
 en scannant un QR code affiché sur le Mac (code à usage unique, quelques minutes), appareils révocables ; actions
 d'administration (dossier, réindexation) réservées au Mac ; empêcher la veille pendant le pilotage, jusqu'à 1 h après la dernière action du téléphone ; si l'app n'est pas ouverte,
 bouton « Ouvrir sur le Mac » sur le téléphone (le serveur lance la page) ; téléphone Android
-(Chrome). Phases : socle réseau + clés → appairage QR → interface mobile → télécommande → (plus tard) son sur le téléphone, HTTPS.
+(Chrome) ; icône sur l'écran d'accueil = simple raccourci en HTTP (manifeste + bouton « Ajouter à l'écran d'accueil ») ;
+la vraie installation (PWA plein écran) attendra le HTTPS, via Tailscale de préférence. Veille : capot fermé = veille quoi qu'il arrive. Phases : socle réseau + clés → appairage QR → interface mobile → télécommande → (plus tard) son sur le téléphone, HTTPS.
