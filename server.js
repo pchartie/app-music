@@ -9,6 +9,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { parseFile } from 'music-metadata';
+import { createRemote } from './lib/remote.js';
 
 const exec = promisify(execFile);
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
@@ -697,7 +698,7 @@ async function transcribe(wav) {
 const readBody = (req, max = 10e6) => new Promise((res, rej) => { const chunks = []; let n = 0; req.on('data', (c) => { n += c.length; if (n > max) { rej(new Error('trop gros')); req.destroy(); } else chunks.push(c); }); req.on('end', () => res(Buffer.concat(chunks))); req.on('error', rej); });
 
 // ---------- HTTP ----------
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.flac': 'audio/flac', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.wav': 'audio/wav', '.aiff': 'audio/aiff', '.aif': 'audio/aiff' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.svg': 'image/svg+xml', '.jpg': 'image/jpeg', '.png': 'image/png', '.webmanifest': 'application/manifest+json', '.flac': 'audio/flac', '.mp3': 'audio/mpeg', '.m4a': 'audio/mp4', '.aac': 'audio/aac', '.ogg': 'audio/ogg', '.opus': 'audio/ogg', '.wav': 'audio/wav', '.aiff': 'audio/aiff', '.aif': 'audio/aiff' };
 
 function json(res, data, code = 200) {
   res.writeHead(code, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
@@ -722,10 +723,14 @@ function sendFile(req, res, file, extraHeaders = {}) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+// lan : requête arrivée par le réseau local (téléphone), filtrée par la télécommande
+async function handle(req, res, lan = false) {
   const url = new URL(req.url, 'http://localhost');
-  const p = decodeURIComponent(url.pathname);
+  let p;
+  try { p = decodeURIComponent(url.pathname); } catch { res.writeHead(400); return res.end(); }
   try {
+    if (lan && !remote.gate(req, res, p)) return;
+    if ((p === '/api/pair' || p.startsWith('/api/remote/')) && (await remote.route(req, res, p, url, lan))) return;
     if (p === '/api/library') {
       return json(res, {
         albums: library.albums.map((a) => { const m = metaMem.get('album-' + a.id) || {}; return { ...a, genres: m.genres || [], label: m.label || null, firstRelease: m.firstRelease || null }; }),
@@ -801,14 +806,16 @@ const server = http.createServer(async (req, res) => {
       const t = library.tracks.find((x) => x.id === m[1]);
       return t ? sendFile(req, res, t.path) : (res.writeHead(404), res.end());
     }
-    const file = path.join(ROOT, 'public', p === '/' ? 'index.html' : p);
+    const file = path.join(ROOT, 'public', p.endsWith('/') ? p + 'index.html' : p);
     if (!file.startsWith(path.join(ROOT, 'public'))) { res.writeHead(403); return res.end(); }
     return sendFile(req, res, file, { 'Cache-Control': 'no-cache' });
   } catch (e) {
     console.error(e);
-    json(res, { error: e.message }, 500);
+    if (!res.headersSent) json(res, { error: e.message }, 500); else res.end();
   }
-});
+}
+const server = http.createServer((req, res) => handle(req, res, false));
+const remote = createRemote({ cacheDir: CACHE, port: PORT, lanPort: Number(process.env.APPMUSIC_LAN_PORT || PORT), handler: handle, getLibrary: () => library });
 
 try { library = JSON.parse(fs.readFileSync(LIB_FILE, 'utf8')); } catch {}
 
@@ -826,5 +833,6 @@ if (process.argv.includes('--sync')) {
     scan();
     watchMusic();
     firstRunShortcut();
+    remote.refresh().catch(() => {});
   });
 }

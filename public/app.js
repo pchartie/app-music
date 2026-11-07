@@ -4,6 +4,7 @@ import * as nav from './keynav.js';
 import { listen, voiceAvailable } from './voice.js';
 import { liquidGlass } from './glass.js';
 import { buildMixes, byArtistYear } from './mixes.js';
+import { openRemotePanel } from './remote-panel.js';
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -867,6 +868,8 @@ view.addEventListener('click', (e) => {
 attachTilt(view);
 
 // ---------- Lecteur ----------
+// Télécommande : défini plus bas, une fois le lecteur prêt (le lecteur l'appelle à chaque changement)
+let remoteLink = { publish() {} };
 const audio = new Audio();
 audio.preload = 'auto';
 const player = {
@@ -1007,6 +1010,7 @@ if ('mediaSession' in navigator) {
 // File d'attente
 // carte « Ensuite » du lecteur : le prochain titre de la file
 function renderNext() {
+  remoteLink.publish();
   const nextPos = player.pos + 1 < player.order.length ? player.pos + 1 : player.repeat === 'all' && player.order.length > 1 ? 0 : -1;
   const t = nextPos >= 0 ? T.get(player.queue[player.order[nextPos]]) : null;
   $('#p-next').classList.toggle('is-end', !t);
@@ -1111,6 +1115,7 @@ np.addEventListener('pointermove', (e) => {
 // Lettres : commencer une recherche · Ctrl+M : recherche vocale
 const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight: 'right' };
 function goBack() {
+  if ($('#remote').classList.contains('open')) return $('#rm-close')?.click();
   if ($('#voice').classList.contains('open')) return stopVoice();
   if ($('#queue').classList.contains('open')) { $('#q-close').click(); return nav.focusEl($('#b-queue')); }
   if (np.classList.contains('open')) { closeNP(); return nav.focusEl($('#p-now')); }
@@ -1161,6 +1166,70 @@ window.addEventListener('keydown', (e) => {
     const input = $('#search'); input.focus(); input.value = k; input.dispatchEvent(new Event('input'));
   }
 });
+
+// ---------- Télécommande : la page obéit au téléphone et lui envoie ce qu'elle joue ----------
+function startRemoteLink() {
+  const id = Math.random().toString(36).slice(2, 10);
+  let phones = 0, timer = null, blocked = false;
+  const snapshot = () => {
+    const pos = Math.max(0, player.pos);
+    return {
+      current: player.current, playing: !audio.paused, position: audio.currentTime || 0,
+      duration: audio.duration || T.get(player.current)?.duration || 0, volume: audio.volume,
+      shuffle: player.shuffle, repeat: player.repeat, pos: player.pos, length: player.order.length,
+      queue: player.order.slice(pos, pos + 101).map((i) => player.queue[i]), blocked,
+    };
+  };
+  const publish = () => {
+    if (!phones) return;
+    clearTimeout(timer);
+    timer = setTimeout(() => fetch('/api/remote/state', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, state: snapshot() }) }).catch(() => {}), 120);
+  };
+  // le navigateur peut refuser de lancer le son sans clic dans la page (page ouverte depuis le téléphone)
+  const tryPlay = () => audio.play().then(() => { if (blocked) { blocked = false; publish(); } }).catch((e) => {
+    if (e.name !== 'NotAllowedError') return;
+    blocked = true; publish(); toast('Cliquez dans la page pour lancer la lecture demandée par le téléphone');
+  });
+  const inQueue = (i) => Number.isInteger(i) && i >= 0 && i < player.order.length;
+  function apply(c) {
+    switch (c.action) {
+      case 'toggle': if (player.current && !audio.paused) audio.pause(); else if (player.current) tryPlay(); else { player.toggle(); tryPlay(); } break;
+      case 'play': if (player.current) tryPlay(); else { player.toggle(); tryPlay(); } break;
+      case 'pause': audio.pause(); break;
+      case 'next': player.next(false); tryPlay(); break;
+      case 'prev': player.prev(); tryPlay(); break;
+      case 'seek': if (audio.duration) audio.currentTime = Math.max(0, Math.min(audio.duration - 0.5, c.position)); break;
+      case 'volume': { const v = Math.max(0, Math.min(1, c.value)); audio.volume = v; setSlider($('#volume'), v); store.set('volume', v); break; }
+      case 'playList': player.playList(c.ids, Number.isInteger(c.start) ? c.start : 0, typeof c.shuffle === 'boolean' ? { shuffle: c.shuffle } : {}); syncButtons(); tryPlay(); break;
+      case 'enqueue': {
+        const empty = !player.queue.length;
+        player.insert(c.ids, c.next ? player.pos + 1 : player.order.length);
+        if (empty) tryPlay();
+        toast(c.ids.length > 1 ? `${c.ids.length} titres ajoutés depuis le téléphone` : 'Titre ajouté depuis le téléphone');
+        break;
+      }
+      case 'jump': if (inQueue(c.index)) { player.jump(c.index); tryPlay(); } break;
+      case 'remove': if (inQueue(c.index) && c.index > player.pos) player.remove(c.index); break;
+      case 'move': if (inQueue(c.from) && c.from > player.pos && Number.isInteger(c.to) && c.to > player.pos && c.to <= player.order.length) player.move(c.from, c.to); break;
+      case 'shuffle': $('#b-shuffle').click(); break;
+      case 'repeat': $('#b-repeat').click(); break;
+      case 'clear': player.clearUpcoming(); break;
+    }
+    publish();
+  }
+  const es = new EventSource(`/api/remote/events?role=player&id=${id}`);
+  es.onmessage = (e) => {
+    let m; try { m = JSON.parse(e.data); } catch { return; }
+    if (m.type === 'remotes') { phones = m.count; $('#remote-btn').classList.toggle('connected', phones > 0); publish(); }
+    if (m.type === 'command') apply(m.cmd);
+  };
+  for (const ev of ['play', 'pause', 'seeked', 'volumechange', 'loadedmetadata']) audio.addEventListener(ev, publish);
+  audio.addEventListener('play', () => { if (blocked) { blocked = false; publish(); } });
+  // recalage régulier de la position affichée sur le téléphone
+  setInterval(() => { if (phones && !audio.paused) publish(); }, 10000);
+  remoteLink = { publish };
+}
+$('#remote-btn').onclick = () => openRemotePanel();
 
 $('#rescan').onclick = async () => {
   $('#rescan').classList.add('spin');
@@ -1273,4 +1342,5 @@ $('#lib-meta').addEventListener('click', async (e) => {
   const s = store.get('session');
   if (s?.queue?.every((id) => T.has(id))) { Object.assign(player, { queue: s.queue, order: s.order, pos: s.pos }); player.load(false); }
   route();
+  startRemoteLink();
 })();

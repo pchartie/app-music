@@ -716,3 +716,29 @@ body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p
 /* retour sur Albums / Artistes : bref reflet autour de la pochette qu'on venait d'ouvrir */
 .came-back .tilt, .came-back .avatar { animation: came-back 1.6s var(--ease); }
 @keyframes came-back { 0%, 35% { box-shadow: 0 0 0 3px rgba(255, 255, 255, .85), 0 0 34px 4px rgba(250, 45, 72, .45), var(--shadow-cover); } 100% { box-shadow: var(--shadow-cover); } }
+
+/* ---------- Télécommande : panneau d'association d'un téléphone ---------- */
+.lib-tools { display: flex; gap: 2px; }
+#remote-btn { position: relative; }
+#remote-btn.connected { color: #30d158; }
+#remote-btn.connected::after { content: ""; position: absolute; top: 4px; right: 4px; width: 6px; height: 6px; border-radius: 50%; background: #30d158; box-shadow: 0 0 6px #30d158; }
+.remote { overflow-y: auto; }
+.rm-panel { width: min(560px, 100%); padding: 20px 0; }
+.rm-logo { background: linear-gradient(160deg, #5ac8fa, #0a84ff 55%, #0052c2); box-shadow: 0 20px 50px -14px rgba(10, 132, 255, .7), inset 0 1px 0 rgba(255, 255, 255, .35); }
+.rm-logo svg { animation: none; width: 46px; height: 46px; }
+.rm-pair-area { min-height: 46px; }
+.rm-qr { width: 236px; height: 236px; margin: 0 auto; padding: 0; border-radius: 18px; overflow: hidden; background: #fff; box-shadow: 0 24px 60px -18px rgba(0, 0, 0, .8), 0 0 0 1px rgba(255, 255, 255, .1); animation: rise .5s var(--ease) both; }
+.rm-qr svg { display: block; width: 100%; height: 100%; }
+.rm-hint { color: var(--text); font-size: 15px; line-height: 1.5; margin: 18px 0 6px; }
+.rm-timer { color: var(--text-2); font-size: 13px; font-variant-numeric: tabular-nums; }
+.rm-timer .link-btn { font-size: 13px; }
+.rm-flash { color: #30d158; font-size: 15px; font-weight: 600; margin: 0 0 16px; }
+.rm-note { margin: 22px auto 0; max-width: 500px; color: var(--text-2); font-size: 13px; line-height: 1.5; }
+.rm-note p { margin: 0 0 6px; }
+.rm-note svg { width: 13px; height: 13px; vertical-align: -2px; color: var(--text-2); }
+.rm-row .name { font: 500 14px -apple-system, BlinkMacSystemFont, sans-serif; }
+.rm-row .btn { height: 28px; padding: 0 12px; font-size: 12.5px; }
+.rm-row .ic { background: linear-gradient(160deg, #5ac8fa, #0a84ff); }
+.rm-row .ic.home { background: linear-gradient(160deg, #63e6a0, #1f9d55); }
+.rm-on { color: #30d158; }
+.keys .rm-row .btn:focus-visible, .keys #rm-close:focus-visible, .keys #rm-new:focus-visible { box-shadow: 0 0 0 2px rgba(255, 255, 255, .7); }

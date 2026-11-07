@@ -36,9 +36,9 @@ npm run install-voice             # optionnel : reconnaissance vocale (whisper.c
 dépend du système (`caffeinate`, `open`, `sips`, `osascript`, détection du réseau…) doit passer par une petite couche
 avec un équivalent Linux (`systemd-inhibit`, `xdg-open`…).
 
-## Feuille de route (discutée, pas commencée)
+## Feuille de route
 
-1. **Téléphone dans l'appartement** : serveur accessible sur le réseau local (aujourd'hui lié à 127.0.0.1 exprès),
+1. **Téléphone dans l'appartement** (télécommande faite le 2026-11-07 : `lib/remote.js`, `public/m/`, tests `remote*.test.js` ; reste le son sur le téléphone et le HTTPS) : serveur accessible sur le réseau local (aujourd'hui lié à 127.0.0.1 exprès),
    protégé par un code d'accès ; l'écran de choix du dossier reste réservé à la machine locale. Interface tactile/responsive,
    installable comme PWA. Deux modes : son sur le téléphone (streaming) ou télécommande du Mac (le navigateur du Mac joue,
    le téléphone pilote via le serveur, ex. SSE). Micro sur téléphone = HTTPS requis.

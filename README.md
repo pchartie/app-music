@@ -101,6 +101,30 @@ npm run install-voice   # compile whisper.cpp et télécharge le modèle « smal
 
 Ensuite, cliquez sur le micro dans la recherche ou appuyez sur `Ctrl+M`. Les noms des artistes de votre bibliothèque aident la reconnaissance.
 
+## Téléphone (télécommande)
+
+Pilotez App Music depuis un téléphone Android, sur le Wi-Fi de la maison : la musique continue de sortir de l'ordinateur.
+
+1. Dans App Music, cliquez sur l'icône du téléphone, à côté de « Ma bibliothèque », puis sur **Associer un téléphone**.
+2. Scannez le QR code avec l'appareil photo du téléphone : App Music s'ouvre dans Chrome, le téléphone est associé.
+3. Pour retrouver l'app d'un geste : menu ⋮ de Chrome → **Ajouter à l'écran d'accueil**.
+
+Sur le téléphone : albums, artistes, sélections, recherche, lecture en cours (position, volume, aléatoire, répétition)
+et « À suivre » (ajouter, sauter à un titre, retirer). Si App Music est fermée sur l'ordinateur, le bouton
+**Ouvrir sur le Mac** la rouvre, puis exécute la demande en attente. L'ordinateur reste éveillé jusqu'à 1 h après la
+dernière action du téléphone (l'écran peut s'éteindre ; capot fermé, un portable se met quand même en veille).
+
+Sécurité :
+- App Music ne s'ouvre au réseau que sur le Wi-Fi de la maison, reconnu à l'adresse matérielle de la box,
+  et seulement s'il y a un téléphone associé. Ailleurs (café, train), elle reste invisible, comme avant ;
+- chaque téléphone reçoit sa propre clé, en scannant un code valable 3 minutes et utilisable une seule fois ;
+  on peut le retirer à tout moment depuis le même panneau ;
+- le choix du dossier, l'actualisation et l'association restent réservés à l'ordinateur ; le téléphone ne reçoit
+  jamais les fichiers audio.
+
+Si le téléphone n'arrive pas à se connecter : macOS peut demander, la première fois, d'autoriser les connexions
+entrantes (acceptez) ; un VPN peut bloquer le réseau local (autorisez « les connexions au réseau local » dans ses réglages).
+
 ## Clavier et télécommande
 
 | Touche | Action |
@@ -128,7 +152,9 @@ npm test           # toute la batterie de tests (~25 s)
 sans jamais toucher à votre musique. Ils couvrent :
 - le serveur : indexation, regroupements, plages audio, confidentialité des chemins, mode hors ligne ;
 - la recherche ;
-- l'interface, dans Brave, Chrome ou Chromium sans fenêtre : lecture, file « À suivre », clavier, absence de ressources externes.
+- l'interface, dans Brave, Chrome ou Chromium sans fenêtre : lecture, file « À suivre », clavier, absence de ressources externes ;
+- la télécommande : réseau simulé, association par QR code (lu par un vrai décodeur), clés, accès refusés,
+  puis un ordinateur et un téléphone simulés côte à côte.
 
 Pour imposer un navigateur : `APPMUSIC_BROWSER=/chemin/vers/chrome`. Les captures de cette page se régénèrent avec `npm run screenshots`.
 L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icône macOS avec `npm run make-icon` (`assets/AppIcon.icns`, installée par `npm run make-app`).
@@ -142,6 +168,11 @@ L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icô
 - `public/keynav.js` : navigation spatiale au clavier et à la télécommande
 - `public/voice.js` : capture du micro et détection de fin de phrase
 - `public/glass.js` : effet de verre liquide du lecteur (réfraction, dispersion)
+- `public/remote-panel.js` : panneau « Télécommande » de l'ordinateur (QR code, appareils, réseau de la maison)
+- `public/m/` : l'app du téléphone (`npm run make-phone-icons` régénère ses icônes)
+- `lib/remote.js` : association, clés d'appareil, réseau de la maison, canal en direct téléphone ↔ ordinateur
+- `lib/system.js` : tout ce qui dépend du système (réseau, anti-veille, ouverture du navigateur), macOS et Linux
+- `lib/qr.js` : QR code fabriqué localement
 - `scripts/` : lanceur, création de l'app, reconnaissance vocale, captures d'écran
 - `tests/` : batterie de tests et générateur de bibliothèque factice
 
@@ -149,6 +180,8 @@ Variables utiles :
 - `PORT` : port du serveur ;
 - `MUSIC_DIR` : dossier de musique, prioritaire sur `config.json` ;
 - `APPMUSIC_CONFIG` et `APPMUSIC_CACHE` : emplacements de la config et du cache ;
-- `APPMUSIC_OFFLINE=1` : simule l'absence de réseau.
+- `APPMUSIC_OFFLINE=1` : simule l'absence de réseau ;
+- télécommande (tests) : `APPMUSIC_FAKE_NETWORK` (réseau simulé), `APPMUSIC_LAN_PORT`, `APPMUSIC_NET_INTERVAL`,
+  `APPMUSIC_PAIR_TTL`, `APPMUSIC_OPEN_LOG`.
 
 Les miniatures sont générées avec `sips`, fourni avec macOS.

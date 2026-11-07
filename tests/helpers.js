@@ -9,7 +9,7 @@ import { makeLibrary } from './fixtures.js';
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 
-const freePort = () => new Promise((resolve, reject) => {
+export const freePort = () => new Promise((resolve, reject) => {
   const s = net.createServer(); s.unref(); s.on('error', reject);
   s.listen(0, '127.0.0.1', () => { const { port } = s.address(); s.close(() => resolve(port)); });
 });
@@ -28,11 +28,12 @@ export function findBrowser() {
 
 // withMusic: false -> premier lancement, aucun dossier choisi.
 // music / cache : dossiers fournis par l'appelant (gardés à l'arrêt) ; sinon tout est temporaire.
-export async function startServer({ withMusic = true, music: givenMusic, cache: givenCache } = {}) {
+// env : variables d'environnement en plus (télécommande : faux réseau, port du réseau local…)
+export async function startServer({ withMusic = true, music: givenMusic, cache: givenCache, env: extraEnv = {} } = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'app-music-test-'));
   const music = givenMusic || (withMusic ? makeLibrary(path.join(tmp, 'music')) : null);
   const port = await freePort();
-  const env = { ...process.env, PORT: String(port), APPMUSIC_CACHE: givenCache || path.join(tmp, 'cache'), APPMUSIC_CONFIG: path.join(tmp, 'config.json'), APPMUSIC_OFFLINE: '1' };
+  const env = { ...process.env, PORT: String(port), APPMUSIC_CACHE: givenCache || path.join(tmp, 'cache'), APPMUSIC_CONFIG: path.join(tmp, 'config.json'), APPMUSIC_OFFLINE: '1', ...extraEnv };
   delete env.MUSIC_DIR;
   if (music) env.MUSIC_DIR = music;
   const child = spawn(process.execPath, ['server.js'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });

@@ -29,8 +29,9 @@
       </nav>
       <div class="sidebar-foot">
         <div class="lib-card">
-          <div class="lib-head"><span>Ma bibliothèque</span>
-            <button id="rescan" title="Actualiser la bibliothèque"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4.5v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+          <div class="lib-head"><span>Ma bibliothèque</span><span class="lib-tools">
+            <button id="remote-btn" title="Télécommande : piloter depuis un téléphone"><svg viewBox="0 0 24 24"><rect x="6.5" y="2.5" width="11" height="19" rx="2.6" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M10.5 18.2h3" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></button>
+            <button id="rescan" title="Actualiser la bibliothèque"><svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4.5v4h-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></button></span></div>
           <div class="lib-stats" id="stats"></div>
           <div class="lib-meta" id="lib-meta"></div>
         </div>
@@ -104,6 +105,7 @@
   </aside>
 
   <section class="setup" id="setup" aria-hidden="true"></section>
+  <section class="setup remote" id="remote" aria-hidden="true"></section>
 
   <section class="voice" id="voice" aria-hidden="true">
     <div class="voice-orb" id="voice-orb"><svg viewBox="0 0 24 24"><rect x="9" y="3" width="6" height="11" rx="3" fill="currentColor"/><path d="M6 11a6 6 0 0 0 12 0M12 17v3.5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></div>

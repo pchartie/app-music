@@ -11,16 +11,19 @@
     "app": "zsh scripts/launch.sh",
     "make-app": "zsh scripts/make-app.sh",
     "screenshots": "node scripts/screenshots.mjs",
-    "make-icon": "node scripts/make-icon.mjs"
+    "make-icon": "node scripts/make-icon.mjs",
+    "make-phone-icons": "node scripts/make-phone-icons.mjs"
   },
   "keywords": [],
   "author": "",
   "license": "ISC",
   "type": "module",
   "dependencies": {
-    "music-metadata": "^12.3.4"
+    "music-metadata": "^12.3.4",
+    "qrcode-generator": "^1.4.4"
   },
   "devDependencies": {
+    "jsqr": "^1.4.0",
     "playwright-core": "^1.65.0"
   }
 }
