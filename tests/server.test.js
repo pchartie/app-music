@@ -2,9 +2,10 @@
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
+import os from 'node:os';
 import path from 'node:path';
 import { startServer, sleep } from './helpers.js';
-import { EXPECTED, fingerprint, flac, mp3 } from './fixtures.js';
+import { EXPECTED, fingerprint, flac, mp3, png } from './fixtures.js';
 
 let srv, lib, printBefore;
 const album = (title) => lib.albums.find((a) => a.title === title);
@@ -235,4 +236,33 @@ test('premier lancement : aucun dossier choisi', async () => {
     const bad = await first.api('/api/setup', { method: 'POST', body: JSON.stringify({ musicDir: path.join(first.tmp, 'n-existe-pas') }) });
     assert.equal(bad.status, 400);
   } finally { await first.stop(); }
+});
+
+test('double album sans numéro de disque dans les étiquettes : disque lu dans le nom « 101-… », « 201-… »', async () => {
+  const music = fs.mkdtempSync(path.join(os.tmpdir(), 'app-music-disques-'));
+  const dir = path.join(music, 'Groupe - Double (2CD)');
+  fs.mkdirSync(dir);
+  const put = (name, title, no) => fs.writeFileSync(path.join(dir, name), flac({ tags: { TITLE: title, ARTIST: 'Groupe', ALBUM: 'Double', TRACKNUMBER: no } }));
+  fs.writeFileSync(path.join(dir, 'cover.png'), png(16, 16, [90, 30, 30])); // avec pochette : rien ne force la relecture
+  put('101-groupe-ouverture.flac', 'Ouverture', 1); put('102-groupe-bataille.flac', 'Bataille', 2);
+  put('201-groupe-ouverture.flac', 'Ouverture', 1); put('202-groupe-slaget.flac', 'Slaget', 2);
+  const cache = path.join(music, '..', path.basename(music) + '-cache');
+  const check = async () => {
+    const s = await startServer({ music, cache });
+    try {
+      const l = (await s.api('/api/library')).body;
+      const a = l.albums.find((x) => x.title === 'Double');
+      assert.equal(a.discs, 2);
+      assert.deepEqual(a.tracks.map((id) => l.tracks.find((t) => t.id === id)).map((t) => [t.disc, t.title]),
+        [[1, 'Ouverture'], [1, 'Bataille'], [2, 'Ouverture'], [2, 'Slaget']]);
+    } finally { await s.stop(); }
+  };
+  try {
+    await check();
+    // bibliothèque indexée par une version précédente (tout en disque 1) : relue au lancement suivant
+    const file = path.join(cache, 'library.json'), old = JSON.parse(fs.readFileSync(file, 'utf8'));
+    for (const t of old.tracks) { t.disc = 1; delete t.reader; }
+    fs.writeFileSync(file, JSON.stringify(old));
+    await check();
+  } finally { for (const d of [music, cache]) fs.rmSync(d, { recursive: true, force: true, maxRetries: 5 }); }
 });

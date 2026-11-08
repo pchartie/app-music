@@ -17,6 +17,7 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4321);
 const CACHE = process.env.APPMUSIC_CACHE || path.join(ROOT, 'cache');
 const COVERS = path.join(CACHE, 'covers');
+const READER = 2; // version de la lecture des fichiers (2 : disque lu dans le nom « 101-… »)
 const META = path.join(CACHE, 'meta');
 const ARTIST_IMG = path.join(CACHE, 'artists');
 const LIB_FILE = path.join(CACHE, 'library.json');
@@ -90,6 +91,7 @@ async function scan() {
   scanning = true;
   const t0 = Date.now();
   const previous = new Map(library.tracks.map((t) => [t.path, t]));
+  // READER : version de la lecture des fichiers ; à augmenter quand elle change, pour relire toute la bibliothèque une fois
   const files = await walk(MUSIC_DIR);
   scanProgress = { done: 0, total: files.length };
   const tracks = [];
@@ -100,7 +102,7 @@ async function scan() {
     let st;
     try { st = await fsp.stat(file); } catch { continue; }
     const prev = previous.get(file);
-    if (prev && prev.mtime === st.mtimeMs && prev.size !== undefined && fs.existsSync(path.join(COVERS, prev.albumId + '.jpg'))) { tracks.push(prev); continue; }
+    if (prev && prev.mtime === st.mtimeMs && prev.reader === READER && fs.existsSync(path.join(COVERS, prev.albumId + '.jpg'))) { tracks.push(prev); continue; }
     try {
       const m = await parseFile(file, { duration: true });
       const c = m.common;
@@ -115,6 +117,9 @@ async function scan() {
       title = title.replace(prefix, '');
       const discFromAlbum = (c.album || '').match(/(?:cd|disc|disque)\s*(\d+)/i);
       const discFromDir = path.basename(dir).match(/^(?:cd|disc|disque|disk)\s*(\d+)$/i);
+      // nommage « 101-titre », « 201-titre » (disque puis numéro sur 2 chiffres), quand les étiquettes ne disent rien du disque
+      const n = path.basename(file).match(/^([1-9])(\d\d)(?!\d)/);
+      const discFromName = n && !c.disk?.no && Number(n[2]) === (c.track?.no || Number(n[2])) ? n[1] : null;
       var t = {
         id: hash(file),
         path: file,
@@ -127,10 +132,11 @@ async function scan() {
         taggedAlbumArtist: c.albumartist || null,
         album,
         trackNo: c.track?.no || 0,
-        disc: c.disk?.no || Number(discFromAlbum?.[1] || discFromDir?.[1] || 1),
+        disc: c.disk?.no || Number(discFromAlbum?.[1] || discFromDir?.[1] || discFromName || 1),
         year: c.year || null,
         genre: c.genre?.[0] || null,
         duration: m.format.duration || 0,
+        reader: READER,
         codec: m.format.codec || path.extname(file).slice(1).toUpperCase(),
         bits: m.format.bitsPerSample || null,
         rate: m.format.sampleRate || null,
