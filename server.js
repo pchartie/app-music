@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { parseFile } from 'music-metadata';
 import { createRemote } from './lib/remote.js';
+import { toJpeg } from './lib/images.js';
 
 const exec = promisify(execFile);
 const STARTED_AT = Date.now(); // le lanceur redémarre le serveur si son code est plus récent
@@ -284,13 +285,9 @@ function assignAlbums(tracks, pictures) {
 }
 
 // ---------- Pochettes ----------
+// Image illisible (fichier abîmé, format exotique) : on garde l'original tel quel, le navigateur saura souvent l'afficher
 async function resize(src, dest) {
-  // sips est fourni avec macOS
-  try {
-    await exec('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '88', '-Z', '1000', src, '--out', dest]);
-  } catch {
-    await fsp.copyFile(src, dest);
-  }
+  try { await toJpeg(src, dest, { max: 1000, quality: 88 }); } catch { await fsp.copyFile(src, dest); }
 }
 
 async function ensureCover(album, picture) {
@@ -468,7 +465,7 @@ function artistImage(ar, kind) {
       const r = await fetch(url, { headers: { 'User-Agent': UA }, signal: AbortSignal.timeout(20000) });
       if (!r.ok) throw new Error(r.status);
       await fsp.writeFile(tmp, Buffer.from(await r.arrayBuffer()));
-      await exec('sips', ['-s', 'format', 'jpeg', '-s', 'formatOptions', '85', '-Z', kind === 'thumb' ? '600' : '1920', tmp, '--out', dest]);
+      await toJpeg(tmp, dest, { max: kind === 'thumb' ? 600 : 1920, quality: 85 });
       return dest;
     } catch { return null; } finally { fsp.rm(tmp, { force: true }).catch(() => {}); imgJobs.delete(key); }
   })());

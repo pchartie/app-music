@@ -74,6 +74,7 @@ test('pochettes : dossier (cover, folder, front), intégrée au FLAC, et absence
     const r = await srv.api(`/cover/${a.id}.jpg`);
     assert.equal(r.status, 200);
     assert.ok(r.body.length > 50, 'image non vide');
+    assert.deepEqual([...r.body.subarray(0, 3)], [0xff, 0xd8, 0xff], `${title} : PNG converti en vrai JPEG`);
   }
   assert.equal(album('Café Serré').hasCover, false, 'pas de pochette ni de téléchargement hors ligne');
   assert.equal((await srv.api('/cover/000000000000.jpg')).status, 404);
