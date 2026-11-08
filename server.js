@@ -11,6 +11,7 @@ import { fileURLToPath } from 'node:url';
 import { parseFile } from 'music-metadata';
 import { createRemote } from './lib/remote.js';
 import { toJpeg } from './lib/images.js';
+import { pickFolder, volumeDirs } from './lib/system.js';
 
 const exec = promisify(execFile);
 const STARTED_AT = Date.now(); // le lanceur redémarre le serveur si son code est plus récent
@@ -26,8 +27,9 @@ const ADDED_LOG = path.join(CACHE, 'added.json'); // date d'ajout de chaque albu
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
 const UA = 'AppMusic/1.0 (application musicale locale)';
 const CONFIG_FILE = process.env.APPMUSIC_CONFIG || path.join(ROOT, 'config.json'); // propre à chaque machine, ignoré par Git
-const expandHome = (p) => (p || '').trim().replace(/^~(?=$|\/)/, os.homedir());
-const tilde = (p) => (p ? p.replace(os.homedir(), '~') : null);
+const expandHome = (p) => (p || '').trim().replace(/^~(?=$|[\\/])/, os.homedir());
+// chemin affiché : ~ pour le dossier personnel (ni le nom d'utilisateur ni le disque)
+const tilde = (p) => { const h = os.homedir(); return !p ? null : p === h ? '~' : p.startsWith(h + path.sep) ? '~' + p.slice(h.length) : p; };
 function readConfig() { try { return JSON.parse(fs.readFileSync(CONFIG_FILE, 'utf8')); } catch { return {}; } }
 function writeConfig(c) { fs.writeFileSync(CONFIG_FILE, JSON.stringify(c, null, 2)); }
 let MUSIC_DIR = process.env.MUSIC_DIR || readConfig().musicDir || null;
@@ -633,7 +635,7 @@ async function countAudio(dir, { maxDepth = 6, maxEntries = 40000 } = {}) {
     let entries; try { entries = await fsp.readdir(d, { withFileTypes: true }); } catch { return; }
     for (const e of entries) {
       if (++seen > maxEntries) return;
-      if (e.name.startsWith('.') || e.name === 'node_modules' || e.name.endsWith('.app') || e.name === 'Library') continue;
+      if (e.name.startsWith('.') || e.name.startsWith('$') || e.name === 'node_modules' || e.name.endsWith('.app') || e.name === 'Library' || e.name === 'AppData' || e.name === 'System Volume Information') continue;
       if (e.isDirectory()) await visit(path.join(d, e.name), depth + 1);
       else if (AUDIO_EXT.has(path.extname(e.name).toLowerCase())) audio++;
     }
@@ -643,13 +645,17 @@ async function countAudio(dir, { maxDepth = 6, maxEntries = 40000 } = {}) {
 }
 async function candidates() {
   const home = os.homedir();
-  const dirs = ['Music', 'Musique', 'Downloads', 'Desktop', 'Documents'].map((d) => path.join(home, d));
-  try { for (const v of await fsp.readdir('/Volumes')) if (v !== 'Macintosh HD') dirs.push(path.join('/Volumes', v)); } catch {}
-  const out = [];
-  for (const d of dirs) {
+  // dossiers personnels (noms anglais, et français des bureaux Linux), puis disques externes et clés USB
+  const dirs = ['Music', 'Musique', 'Downloads', 'Téléchargements', 'Desktop', 'Bureau', 'Documents'].map((d) => path.join(home, d));
+  const volumes = new Set(volumeDirs());
+  const out = [], seen = new Set();
+  for (const d of [...dirs, ...volumes]) {
     if (!fs.existsSync(d)) continue;
+    let real = d; try { real = fs.realpathSync(d); } catch {}
+    if (seen.has(real)) continue; // ex. Musique, lien vers Music
+    seen.add(real);
     const { audio, partial } = await countAudio(d, { maxDepth: 5, maxEntries: 15000 });
-    if (audio) out.push({ path: d, label: tilde(d), audio, partial, volume: d.startsWith('/Volumes/') });
+    if (audio) out.push({ path: d, label: tilde(d), audio, partial, volume: volumes.has(d) });
   }
   return out.sort((a, b) => b.audio - a.audio);
 }
@@ -657,7 +663,7 @@ async function setMusicDir(dir) {
   const full = path.resolve(expandHome(dir));
   let st; try { st = await fsp.stat(full); } catch { return { error: 'Ce dossier est introuvable.' }; }
   if (!st.isDirectory()) return { error: 'Ce chemin n’est pas un dossier.' };
-  try { await fsp.access(full, fs.constants.R_OK); } catch { return { error: 'Ce dossier n’est pas lisible (autorisations macOS ?).' }; }
+  try { await fsp.access(full, fs.constants.R_OK); } catch { return { error: process.platform === 'darwin' ? 'Ce dossier n’est pas lisible (autorisations macOS ?).' : 'Ce dossier n’est pas lisible (autorisations ?).' }; }
   const { audio } = await countAudio(full, { maxDepth: 12, maxEntries: 400000 });
   if (!audio) return { error: 'Aucun fichier audio (FLAC, MP3, M4A…) trouvé dans ce dossier.' };
   MUSIC_DIR = full;
@@ -667,14 +673,6 @@ async function setMusicDir(dir) {
   scan();
   return { ok: true, path: full, label: tilde(full), audio };
 }
-// Ouvre le sélecteur de dossiers du Finder (le serveur tourne sur le même Mac)
-async function pickFolder() {
-  try {
-    const { stdout } = await exec('osascript', ['-e', 'POSIX path of (choose folder with prompt "Choisissez le dossier qui contient votre musique")'], { timeout: 300000 });
-    return { path: stdout.trim().replace(/\/$/, '') };
-  } catch { return { cancelled: true }; }
-}
-
 const readBody = (req, max = 10e6) => new Promise((res, rej) => { const chunks = []; let n = 0; req.on('data', (c) => { n += c.length; if (n > max) { rej(new Error('trop gros')); req.destroy(); } else chunks.push(c); }); req.on('end', () => res(Buffer.concat(chunks))); req.on('error', rej); });
 
 // ---------- HTTP ----------

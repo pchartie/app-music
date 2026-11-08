@@ -1218,7 +1218,7 @@ function showSetup({ change = false } = {}) {
         <div class="setup-or"><span>ou saisissez son chemin</span></div>
         <form class="setup-path" id="setup-form"><input id="setup-input" spellcheck="false" autocomplete="off" placeholder="~/Musique"><button class="btn soft" type="submit">Valider</button></form>
         <div class="setup-error" id="setup-error"></div>
-        <div class="setup-sugg"><div class="setup-sugg-title">Dossiers contenant de la musique sur ce Mac</div><div id="setup-list" class="setup-list"><div class="setup-searching">Recherche…</div></div></div>
+        <div class="setup-sugg"><div class="setup-sugg-title">Dossiers contenant de la musique sur cet ordinateur</div><div id="setup-list" class="setup-list"><div class="setup-searching">Recherche…</div></div></div>
         ${change ? '<button class="link-btn setup-cancel" id="setup-cancel">Annuler</button>' : ''}
       </div>
       <div class="setup-step hidden" id="setup-progress">
@@ -1260,6 +1260,7 @@ function showSetup({ change = false } = {}) {
       const r = await fetch('/api/setup/pick', { method: 'POST' }).then((x) => x.json()).catch(() => ({}));
       $('#setup-pick').classList.remove('waiting');
       if (r.path) choose(r.path);
+      else if (r.unavailable) { err('Pas de fenêtre de choix de dossier sur ce système : saisissez le chemin ci-dessous.'); nav.focusEl($('#setup-input')); }
     };
     $('#setup-form').onsubmit = (e) => { e.preventDefault(); choose($('#setup-input').value.trim()); };
     $('#setup-cancel')?.addEventListener('click', close);
