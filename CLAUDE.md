@@ -38,6 +38,10 @@ pas `sips`). Lanceur `scripts/launch.mjs` (Node, pas de shell), raccourcis `scri
 `install.sh` (macOS/Linux, POSIX sh) et `install.ps1` (Windows). Chemins : toujours `path.join`, jamais de `/` en dur côté serveur.
 Windows et Linux ne sont vérifiés que par GitHub Actions (`.github/workflows/tests.yml`) : le Mac reste testé en local.
 
+**FLAC 24 bits -> 16 bits** (demande ponctuelle de l'utilisateur, pas une fonction de l'app) :
+`node scripts/flac-16bit.mjs "<source>" ["<destination>"]` (sox + flac installés via Homebrew). Écrit des copies à côté ;
+remplacer les originaux de la bibliothèque seulement sur accord explicite.
+
 ## Feuille de route
 
 1. **Téléphone dans l'appartement** (télécommande faite le 2026-11-07 : `lib/remote.js`, `public/m/`, tests `remote*.test.js` ; reste le son sur le téléphone et le HTTPS) : serveur accessible sur le réseau local (aujourd'hui lié à 127.0.0.1 exprès),

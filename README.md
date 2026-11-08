@@ -186,6 +186,8 @@ L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icô
 - `lib/spectrum.js` : qualité réelle des MP3 (coupure des aigus, décodage mpg123 en WebAssembly, dans un fil séparé)
 - `lib/qr.js` : QR code fabriqué localement
 - `scripts/` : lanceur (`launch.mjs`), raccourcis (`make-app.mjs`), icônes, captures d'écran
+- `scripts/flac-16bit.mjs` : outil à part (pas utilisé par l'app) qui copie un dossier de FLAC 24 bits en FLAC 16 bits / 44,1 ou 48 kHz,
+  étiquettes et pochettes comprises, sans toucher aux originaux (nécessite sox et flac)
 - `install.sh` (macOS, Linux) et `install.ps1` (Windows) : installation en une ligne
 - `tests/` : batterie de tests et générateur de bibliothèque factice
 
