@@ -1,12 +1,12 @@
 #!/bin/zsh
-# Crée ~/Applications/App Music.app, une icône à double-cliquer qui lance scripts/launch.sh,
+# macOS (appelé par scripts/make-app.mjs) : crée ~/Applications/App Music.app, une icône à double-cliquer qui lance scripts/launch.sh,
 # et une copie « App Music » sur le bureau (une vraie app, pas un lien : pas de flèche sur l'icône).
 ROOT="${0:A:h:h}"
 APP="$HOME/Applications/App Music.app"
 DESK="$HOME/Desktop/App Music.app"
 OLD_LINK="$HOME/Desktop/App Music"   # ancien raccourci (lien symbolique), remplacé par la copie
 mkdir -p "$HOME/Applications"
-osacompile -o "$APP" -e "do shell script \"zsh '$ROOT/scripts/launch.sh' > /dev/null 2>&1 &\"" || exit 1
+osacompile -o "$APP" -e "do shell script \"sh '$ROOT/scripts/launch.sh' > /dev/null 2>&1 &\"" || exit 1
 # icône de l'app (même dessin que le favicon : public/icon.svg -> assets/AppIcon.icns, npm run make-icon)
 if [ -f "$ROOT/assets/AppIcon.icns" ]; then
   cp "$ROOT/assets/AppIcon.icns" "$APP/Contents/Resources/applet.icns"

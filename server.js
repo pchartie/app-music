@@ -5,15 +5,12 @@ import fsp from 'node:fs/promises';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import os from 'node:os';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 import { parseFile } from 'music-metadata';
 import { createRemote } from './lib/remote.js';
 import { toJpeg } from './lib/images.js';
 import { pickFolder, volumeDirs } from './lib/system.js';
 
-const exec = promisify(execFile);
 const STARTED_AT = Date.now(); // le lanceur redémarre le serveur si son code est plus récent
 const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4321);
@@ -39,14 +36,14 @@ for (const d of [CACHE, COVERS, META, ARTIST_IMG]) fs.mkdirSync(d, { recursive: 
 // Installations antérieures à l'écran d'accueil : la musique était lue dans ~/Downloads
 if (!MUSIC_DIR && fs.existsSync(LIB_FILE)) { MUSIC_DIR = path.join(os.homedir(), 'Downloads'); writeConfig({ musicDir: MUSIC_DIR }); }
 
-// Premier lancement : crée l'app dans ~/Applications et sa copie sur le bureau, une seule fois
+// Premier lancement : crée le raccourci de l'app (bureau et menu des applications, selon le système), une seule fois
 // (s'il est supprimé ensuite, il n'est pas recréé). Pas pour les instances de test (APPMUSIC_CONFIG).
 async function firstRunShortcut() {
-  if (process.platform !== 'darwin' || process.env.APPMUSIC_CONFIG || readConfig().shortcut) return;
+  if (process.env.APPMUSIC_CONFIG || readConfig().shortcut) return;
   try {
-    const { stdout } = await exec('zsh', [path.join(ROOT, 'scripts', 'make-app.sh')]);
+    const { makeShortcut } = await import('./scripts/make-app.mjs');
+    console.log(await makeShortcut());
     writeConfig({ ...readConfig(), shortcut: true });
-    console.log(stdout.trim());
   } catch (e) { console.log('Raccourci non créé :', e.message); }
 }
 
@@ -724,7 +721,7 @@ async function handle(req, res, lan = false) {
     }
     if (p === '/api/status') {
       const m = missing();
-      return json(res, { startedAt: STARTED_AT, scannedAt: library.scannedAt, scanning, scanProgress, needsSetup: !MUSIC_DIR, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync } });
+      return json(res, { startedAt: STARTED_AT, pid: process.pid, scannedAt: library.scannedAt, scanning, scanProgress, needsSetup: !MUSIC_DIR, albums: library.albums.length, meta: { pendingArtists: m.artists.length, pendingAlbums: m.albums.length + m.texts.length, syncing, online, lastSync } });
     }
     if (p === '/api/lossy') {
       const log = await readLossyLog();

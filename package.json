@@ -7,8 +7,8 @@
     "test": "node --test --test-timeout=120000 tests/*.test.js",
     "start": "node server.js",
     "sync": "node server.js --sync",
-    "app": "zsh scripts/launch.sh",
-    "make-app": "zsh scripts/make-app.sh",
+    "app": "node scripts/launch.mjs",
+    "make-app": "node scripts/make-app.mjs",
     "screenshots": "node scripts/screenshots.mjs",
     "make-icon": "node scripts/make-icon.mjs",
     "make-phone-icons": "node scripts/make-phone-icons.mjs"

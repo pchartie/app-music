@@ -3,10 +3,10 @@
 # App Music
 
 **Votre musique FLAC, belle comme au premier jour.**<br>
-Un lecteur local pour macOS, dans l'esprit des apps Apple : Cover Flow en boîtiers CD 3D, fiches d'artistes,
+Un lecteur local pour macOS, Linux et Windows, dans l'esprit des apps Apple : Cover Flow en boîtiers CD 3D, fiches d'artistes,
 recherche qui comprend « metal allemand des années 80 », et zéro dépendance au cloud.
 
-![Node](https://img.shields.io/badge/node-%E2%89%A518-3c873a) ![macOS](https://img.shields.io/badge/macOS-oui-lightgrey) ![Hors ligne](https://img.shields.io/badge/100%25-hors%20ligne-fa2d48) ![Tests](https://img.shields.io/badge/tests-npm%20test-4c6ef5)
+![Node](https://img.shields.io/badge/node-%E2%89%A518-3c873a) ![macOS · Linux · Windows](https://img.shields.io/badge/macOS%20%C2%B7%20Linux%20%C2%B7%20Windows-oui-lightgrey) ![Hors ligne](https://img.shields.io/badge/100%25-hors%20ligne-fa2d48) ![Tests](https://img.shields.io/badge/tests-npm%20test-4c6ef5)
 
 <img src="docs/screenshots/cover-flow.jpg" alt="Cover Flow : les albums en boîtiers CD 3D avec reflets" width="100%">
 
@@ -38,20 +38,34 @@ recherche qui comprend « metal allemand des années 80 », et zéro dépendance
 
 ## Installation
 
-Sur un Mac, ouvrez le **Terminal** (⌘ Espace, « Terminal ») et collez cette ligne :
+**macOS et Linux** : ouvrez un terminal (sur Mac : ⌘ Espace, « Terminal ») et collez cette ligne :
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/pchartie/app-music/main/install.sh | zsh
+curl -fsSL https://raw.githubusercontent.com/pchartie/app-music/main/install.sh | sh
 ```
 
-Et c'est tout. Node.js est téléchargé si besoin (sans droits administrateur), puis l'app est installée dans `~/AppMusic`
-et s'ouvre dans le navigateur. Ensuite, il suffit de double-cliquer sur **App Music** sur le bureau.
+**Windows** : ouvrez **PowerShell** (menu Démarrer, « PowerShell ») et collez cette ligne :
+
+```powershell
+irm https://raw.githubusercontent.com/pchartie/app-music/main/install.ps1 | iex
+```
+
+Et c'est tout. Node.js est téléchargé si besoin (sans droits administrateur), puis l'app est installée dans le dossier
+personnel (`AppMusic`) et s'ouvre dans le navigateur. Ensuite, il suffit de double-cliquer sur **App Music** sur le bureau.
 Relancer la même ligne met l'app à jour, en gardant le cache et le dossier de musique.
 
-Au premier lancement, un écran d'accueil demande le dossier qui contient la musique : sélecteur du Finder, chemin à saisir,
-ou dossiers détectés automatiquement. Ce dossier reste modifiable depuis la colonne de gauche (ligne « Dossier »).
-L'app crée aussi `~/Applications/App Music.app` et une copie sur le bureau, une seule fois :
-si vous le supprimez, il n'est pas recréé, et `npm run make-app` le refait.
+Au premier lancement, un écran d'accueil demande le dossier qui contient la musique : fenêtre de choix de dossier du système,
+chemin à saisir, ou dossiers détectés automatiquement (dossiers personnels, disques externes et clés USB).
+Ce dossier reste modifiable depuis la colonne de gauche (ligne « Dossier »).
+L'app crée aussi son raccourci, une seule fois : `~/Applications/App Music.app` et sa copie sur le bureau (macOS),
+le menu des applications et le bureau (Linux), le menu Démarrer et le bureau (Windows).
+Si vous le supprimez, il n'est pas recréé, et `npm run make-app` le refait.
+
+| | macOS | Linux | Windows |
+|---|---|---|---|
+| Choix du dossier | Finder | zenity (GNOME…) ou kdialog (KDE), sinon chemin à saisir | Explorateur |
+| Raccourci | app dans `~/Applications` + bureau | menu des applications + bureau | menu Démarrer + bureau |
+| Téléphone : rester éveillé | `caffeinate` | `systemd-inhibit` | réglage d'alimentation de Windows |
 
 **Comment ça marche.** `server.js` est un petit serveur local (127.0.0.1:4321, invisible depuis le réseau) qui indexe la musique
 et sert l'audio, les pochettes et les fiches. L'interface est une page web ouverte dans votre navigateur par défaut.
@@ -101,7 +115,7 @@ Pilotez App Music depuis un téléphone Android, sur le Wi-Fi de la maison : la 
 
 Sur le téléphone : albums, artistes, sélections, recherche, lecture en cours (position, volume, aléatoire, répétition)
 et « À suivre » (ajouter, sauter à un titre, retirer). Si App Music est fermée sur l'ordinateur, le bouton
-**Ouvrir sur le Mac** la rouvre, puis exécute la demande en attente. L'ordinateur reste éveillé jusqu'à 1 h après la
+**Ouvrir sur le Mac** (ou sur le nom de l'ordinateur, sous Linux et Windows) la rouvre, puis exécute la demande en attente. L'ordinateur reste éveillé jusqu'à 1 h après la
 dernière action du téléphone (l'écran peut s'éteindre ; capot fermé, un portable se met quand même en veille).
 
 Sécurité :
@@ -112,8 +126,8 @@ Sécurité :
 - le choix du dossier, l'actualisation et l'association restent réservés à l'ordinateur ; le téléphone ne reçoit
   jamais les fichiers audio.
 
-Si le téléphone n'arrive pas à se connecter : macOS peut demander, la première fois, d'autoriser les connexions
-entrantes (acceptez) ; un VPN peut bloquer le réseau local (autorisez « les connexions au réseau local » dans ses réglages).
+Si le téléphone n'arrive pas à se connecter : macOS ou Windows peut demander, la première fois, d'autoriser les connexions
+entrantes (acceptez ; sous Windows, pour les réseaux **privés**) ; un VPN peut bloquer le réseau local (autorisez « les connexions au réseau local » dans ses réglages).
 
 ## Clavier et télécommande
 
@@ -133,7 +147,7 @@ Sur le curseur de position ou de volume, ← et → avancent de 10 s ou règlent
 ```sh
 git clone https://github.com/pchartie/app-music ~/AppMusic && cd ~/AppMusic
 npm install
-npm start          # serveur au premier plan (npm run app : en arrière-plan + navigateur)
+npm start          # serveur au premier plan (npm run app : en arrière-plan + navigateur ; -- --restart pour le relancer)
 npm test           # toute la batterie de tests (~25 s)
 ```
 
@@ -146,7 +160,8 @@ sans jamais toucher à votre musique. Ils couvrent :
   puis un ordinateur et un téléphone simulés côte à côte.
 
 Pour imposer un navigateur : `APPMUSIC_BROWSER=/chemin/vers/chrome`. Les captures de cette page se régénèrent avec `npm run screenshots`.
-L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icône macOS avec `npm run make-icon` (`assets/AppIcon.icns`, installée par `npm run make-app`).
+L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icônes de raccourci avec `npm run make-icon`
+(`assets/AppIcon.icns` pour macOS, `.ico` pour Windows, `.png` pour Linux ; installées par `npm run make-app`).
 
 **Organisation du code.**
 
@@ -159,9 +174,11 @@ L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icô
 - `public/remote-panel.js` : panneau « Télécommande » de l'ordinateur (QR code, appareils, réseau de la maison)
 - `public/m/` : l'app du téléphone (`npm run make-phone-icons` régénère ses icônes)
 - `lib/remote.js` : association, clés d'appareil, réseau de la maison, canal en direct téléphone ↔ ordinateur
-- `lib/system.js` : tout ce qui dépend du système (réseau, anti-veille, ouverture du navigateur), macOS et Linux
+- `lib/system.js` : tout ce qui dépend du système (réseau de la maison, anti-veille, navigateur, choix du dossier, disques externes), macOS, Linux et Windows
+- `lib/images.js` : pochettes et photos réduites en JPEG (sharp)
 - `lib/qr.js` : QR code fabriqué localement
-- `scripts/` : lanceur, création de l'app, captures d'écran
+- `scripts/` : lanceur (`launch.mjs`), raccourcis (`make-app.mjs`), icônes, captures d'écran
+- `install.sh` (macOS, Linux) et `install.ps1` (Windows) : installation en une ligne
 - `tests/` : batterie de tests et générateur de bibliothèque factice
 
 Variables utiles :
@@ -172,4 +189,3 @@ Variables utiles :
 - télécommande (tests) : `APPMUSIC_FAKE_NETWORK` (réseau simulé), `APPMUSIC_LAN_PORT`, `APPMUSIC_NET_INTERVAL`,
   `APPMUSIC_PAIR_TTL`, `APPMUSIC_OPEN_LOG`.
 
-Les miniatures sont générées avec `sips`, fourni avec macOS.

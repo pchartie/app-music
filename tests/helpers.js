@@ -23,6 +23,11 @@ export function findBrowser() {
     '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
     '/Applications/Chromium.app/Contents/MacOS/Chromium',
     '/usr/bin/brave-browser', '/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser',
+    ...[process.env.PROGRAMFILES, process.env['PROGRAMFILES(X86)'], process.env.LOCALAPPDATA].filter(Boolean).flatMap((d) => [
+      path.join(d, 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+      path.join(d, 'Google', 'Chrome', 'Application', 'chrome.exe'),
+      path.join(d, 'Microsoft', 'Edge', 'Application', 'msedge.exe'),
+    ]),
   ].filter(Boolean).find((p) => fs.existsSync(p));
 }
 
@@ -51,6 +56,6 @@ export async function startServer({ withMusic = true, music: givenMusic, cache: 
   try { await waitIndexed(); } catch (e) { child.kill(); fs.rmSync(tmp, { recursive: true, force: true }); throw e; }
   return {
     url, port, tmp, music, cache: env.APPMUSIC_CACHE, api, waitIndexed, logs: () => logs,
-    async stop() { child.kill(); await new Promise((r) => (child.exitCode !== null ? r() : child.once('exit', r))); fs.rmSync(tmp, { recursive: true, force: true }); },
+    async stop() { child.kill(); await new Promise((r) => (child.exitCode !== null ? r() : child.once('exit', r))); fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10 }); }, // Windows : fichiers libérés un instant après l'arrêt
   };
 }

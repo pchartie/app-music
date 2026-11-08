@@ -1,5 +1,5 @@
 // Lit /api/status sur l'entrée standard ; code de sortie 0 si le serveur en cours est plus ancien que son code
-// (server.js ou lib/*.js modifiés depuis son démarrage), 1 sinon. Utilisé par scripts/launch.sh.
+// (server.js ou lib/*.js modifiés depuis son démarrage), 1 sinon. Utilisé par scripts/launch.mjs.
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';

@@ -31,9 +31,12 @@ npm install && npm run app        # l'écran d'accueil demande le dossier de mus
 
 `cache/` et `config.json` ne sont pas versionnés : les métadonnées se retéléchargent au premier lancement (connexion requise une fois).
 
-**Multiplateforme** : l'app tournera aussi sur un portable Linux (changement de machine prévu). Toute fonction qui
-dépend du système (`caffeinate`, `open`, `sips`, `osascript`, détection du réseau…) doit passer par une petite couche
-avec un équivalent Linux (`systemd-inhibit`, `xdg-open`…).
+**Multiplateforme : macOS, Linux et Windows** (portable Linux prévu ; Windows demandé le 2026-11-08). Toute fonction qui
+dépend du système passe par `lib/system.js` avec ses trois versions (réseau de la maison, veille, navigateur, choix du
+dossier, disques externes), testées dans `tests/system.test.js` sur des sorties types. Images : `lib/images.js` (sharp,
+pas `sips`). Lanceur `scripts/launch.mjs` (Node, pas de shell), raccourcis `scripts/make-app.mjs`, installation
+`install.sh` (macOS/Linux, POSIX sh) et `install.ps1` (Windows). Chemins : toujours `path.join`, jamais de `/` en dur côté serveur.
+Windows et Linux ne sont vérifiés que par GitHub Actions (`.github/workflows/tests.yml`) : le Mac reste testé en local.
 
 ## Feuille de route
 
@@ -41,8 +44,7 @@ avec un équivalent Linux (`systemd-inhibit`, `xdg-open`…).
    protégé par un code d'accès ; l'écran de choix du dossier reste réservé à la machine locale. Interface tactile/responsive,
    installable comme PWA. Deux modes : son sur le téléphone (streaming) ou télécommande du Mac (le navigateur du Mac joue,
    le téléphone pilote via le serveur, ex. SSE).
-2. **Portabilité Linux/Docker** (en vue d'un NAS) : remplacer `sips` (miniatures) et `osascript` (sélecteur Finder),
-   fournir une image Docker.
+2. **Portabilité** : macOS, Linux et Windows faits le 2026-11-08 ; reste une image Docker (en vue d'un NAS).
 3. **NAS, écoute hors de la maison** : accès via Tailscale (pas d'exposition Internet), transcodage à la volée
    en AAC/Opus pour la 4G (sans toucher aux FLAC).
 
