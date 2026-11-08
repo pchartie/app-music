@@ -105,6 +105,13 @@ Le panneau « Ma bibliothèque » indique leur nombre et ouvre une page qui les 
 à laquelle chaque album a été repéré et, une fois remplacé par du FLAC, la date à laquelle il ne l'est plus.
 Le bouton **Télécharger la liste des fichiers** donne un CSV (Numbers, Excel) de tous les fichiers concernés, avec leur emplacement.
 
+**Qualité réelle (faux 320).** Un MP3 peut afficher 320 kb/s et venir d'une source bien moins bonne, réencodée à un débit
+plus élevé. L'encodeur coupe les aigus selon son débit (≈ 16 kHz à 128 kb/s, ≈ 19 kHz à 192, 20 kHz et plus à 320) et un
+réencodage garde la coupure de la source : l'app mesure donc, sur le spectre de chaque MP3, où s'arrêtent les aigus.
+Chaque album reçoit un verdict, **faux** (source ≤ 160 kb/s), **gonflé** (source ≈ 192) ou **conforme**, et la page
+classe les albums à remplacer en premier. L'analyse se fait en arrière-plan après chaque indexation (environ une minute pour
+350 titres), sans connexion ; les fichiers ne sont que lus, et un titre n'est réanalysé que s'il change. Le CSV donne le verdict de chaque titre.
+
 ## Téléphone (télécommande)
 
 Pilotez App Music depuis un téléphone Android, sur le Wi-Fi de la maison : la musique continue de sortir de l'ordinateur.
@@ -176,6 +183,7 @@ L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icô
 - `lib/remote.js` : association, clés d'appareil, réseau de la maison, canal en direct téléphone ↔ ordinateur
 - `lib/system.js` : tout ce qui dépend du système (réseau de la maison, anti-veille, navigateur, choix du dossier, disques externes), macOS, Linux et Windows
 - `lib/images.js` : pochettes et photos réduites en JPEG (sharp)
+- `lib/spectrum.js` : qualité réelle des MP3 (coupure des aigus, décodage mpg123 en WebAssembly, dans un fil séparé)
 - `lib/qr.js` : QR code fabriqué localement
 - `scripts/` : lanceur (`launch.mjs`), raccourcis (`make-app.mjs`), icônes, captures d'écran
 - `install.sh` (macOS, Linux) et `install.ps1` (Windows) : installation en une ligne

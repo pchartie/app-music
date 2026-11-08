@@ -645,6 +645,12 @@ body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p
 .lossy-page .hero-actions { margin: 0 0 28px; }
 .lossy-page .btn svg { width: 16px; height: 16px; }
 .lossy-seen { color: var(--text-3); font-size: 11.5px; margin-top: 2px; }
+.lossy-quality { font-size: 11.5px; margin-top: 2px; font-weight: 600; }
+.q-faux { color: #ff6b6b; }
+.q-gonfle { color: var(--warn); }
+.q-ok { color: var(--text-3); font-weight: 500; }
+#lossy-quality-sum:empty { display: none; }
+#lossy-quality-sum b { color: var(--text); font-weight: 600; }
 .lossy-log { width: 100%; border-collapse: collapse; font-size: 13px; }
 .lossy-log td { padding: 9px 8px; border-bottom: 1px solid var(--line); color: var(--text-2); white-space: nowrap; }
 .lossy-log td:first-child { white-space: normal; }

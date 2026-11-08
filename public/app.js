@@ -465,6 +465,15 @@ function viewSelection(key) {
 
 // ---------- Albums avec perte (MP3…) : journal et liste à télécharger ----------
 const fmtDay = (iso) => (iso ? new Date(iso).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric' }) : '');
+// Verdict de l'analyse des aigus (lib/spectrum.js) sous la pochette d'un album MP3
+function qualityLine(q) {
+  const k = q.counts[q.verdict], some = k < q.analysed;
+  const part = some ? ` (${k}/${q.analysed})` : '', which = some ? ` ${k} titre${k > 1 ? 's' : ''} sur ${q.analysed} :` : '';
+  const src = q.source >= 320 ? '' : q.source <= 96 ? 'moins de 128 kb/s' : `≈ ${q.source} kb/s`;
+  if (q.verdict === 'faux') return `<div class="card-sub lossy-quality q-faux" title="${which} les aigus s’arrêtent comme dans un MP3 de ${src}. Le fichier a été réencodé à un débit plus élevé, sans gain de qualité.">Faux ${q.kbps} kb/s : source ${src}${part}</div>`;
+  if (q.verdict === 'gonfle') return `<div class="card-sub lossy-quality q-gonfle" title="${which} les aigus s’arrêtent un peu tôt pour ${q.kbps} kb/s, source probablement de ${src}. Différence légère à l’écoute.">Gonflé : source ${src}${part}</div>`;
+  return `<div class="card-sub lossy-quality q-ok" title="Les aigus montent aussi haut que l’annonce le débit.">Qualité conforme à ${q.kbps} kb/s</div>`;
+}
 function viewLossy() {
   const list = lossyAlbums().sort((a, b) => a.artist.localeCompare(b.artist, 'fr') || (a.year || 0) - (b.year || 0));
   const allMp3 = list.every((a) => a.lossyCodec === 'MP3');
@@ -473,17 +482,45 @@ function viewLossy() {
     <div class="page-head"><h1>${allMp3 ? 'Albums en MP3' : 'Albums avec perte'}</h1><span class="muted">${list.length ? `${list.length} album${list.length > 1 ? 's' : ''} · ${files} fichier${files > 1 ? 's' : ''}` : ''}</span></div>
     ${list.length ? `<p class="lossy-intro">Ces albums ne sont pas en qualité sans perte${allMp3 ? '' : ' (MP3, AAC…)'}. L’app note la date où chacun a été repéré ;
       remplacé par du FLAC, il passe dans l’historique.</p>
+      <p class="lossy-intro" id="lossy-quality-sum"></p>
       <div class="hero-actions"><a class="btn primary" href="/api/lossy.csv" download data-autofocus>${ICON.download} Télécharger la liste des fichiers</a></div>
       <div class="grid">${list.map(albumCard).join('')}</div>`
     : '<div class="empty">Toute la bibliothèque est sans perte. ✨</div>'}
     <div id="lossy-history"></div></div>`;
   onImgLoad(view);
-  fetch('/api/lossy').then((r) => r.json()).then(({ albums, history }) => {
+  const page = $('.lossy-page', view);
+  const showQuality = (albums, analysis) => {
+    const grid = $('.grid', page); if (!grid) return;
+    const info = new Map(albums.map((x) => [x.id, x]));
+    for (const card of $$('.card[data-album]', grid)) {
+      const x = info.get(card.dataset.album);
+      $('.lossy-quality', card)?.remove();
+      if (x?.quality) card.insertAdjacentHTML('beforeend', qualityLine(x.quality));
+    }
+    // à remplacer en priorité : faux, puis gonflés (ordre par artiste conservé à l'intérieur de chaque groupe)
+    const rank = (c) => ({ faux: 0, gonfle: 1 }[info.get(c.dataset.album)?.quality?.verdict] ?? 2);
+    $$('.card[data-album]', grid).map((c, i) => [c, i]).sort(([a, i], [b, j]) => rank(a) - rank(b) || i - j).forEach(([c]) => grid.append(c));
+    const q = albums.map((x) => x.quality).filter(Boolean), n = (v) => q.filter((x) => x.verdict === v).length;
+    const box = $('#lossy-quality-sum', page);
+    box.innerHTML = analysis.running && analysis.total
+      ? `<b>Analyse de la qualité réelle…</b> ${analysis.done.toLocaleString('fr-FR')} / ${analysis.total.toLocaleString('fr-FR')} titres`
+      : q.length ? `<b>Qualité réelle :</b> ${[[n('faux'), 'faux', 'faux'], [n('gonfle'), 'gonflé', 'gonflés'], [n('ok'), 'conforme', 'conformes']].filter(([k]) => k).map(([k, one, many]) => `${k} ${k > 1 ? many : one}`).join(', ')}.
+        Un MP3 peut afficher 320 kb/s et venir d’une source bien moins bonne : l’app mesure où s’arrêtent les aigus
+        (≈ 16 kHz pour du 128 kb/s, ≈ 19 kHz pour du 192, 20 kHz et plus pour un vrai 320).` : '';
+  };
+  const refresh = () => fetch('/api/lossy').then((r) => r.json()).then(({ albums, analysis }) => {
+    if (!document.body.contains(page)) return;
+    showQuality(albums, analysis);
+    if (analysis.running) setTimeout(refresh, 2000);
+  }).catch(() => {});
+  fetch('/api/lossy').then((r) => r.json()).then(({ albums, history, analysis }) => {
     const seen = new Map(albums.map((x) => [x.id, x.firstSeen]));
     for (const card of $$('.grid .card[data-album]', view)) {
       const d = seen.get(card.dataset.album);
       if (d) card.insertAdjacentHTML('beforeend', `<div class="card-sub lossy-seen">Repéré le ${fmtDay(d)}</div>`);
     }
+    showQuality(albums, analysis);
+    if (analysis.running) setTimeout(refresh, 2000);
     const box = $('#lossy-history'); if (!box || !history.length) return;
     box.innerHTML = `<h2>Historique</h2><p class="lossy-intro">Albums qui ne sont plus avec perte (remplacés ou retirés du dossier).</p>
       <table class="lossy-log"><tbody>${history.map((e) => `<tr><td><b>${esc(e.title)}</b><span>${esc(e.artist)}${e.year ? ' · ' + e.year : ''}</span></td>

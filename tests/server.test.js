@@ -152,9 +152,9 @@ test('albums avec perte : liste et fichier CSV à télécharger', async () => {
   assert.ok(text.startsWith('\ufeff'), 'BOM pour Excel');
   const lines = text.slice(1).trim().split('\r\n');
   assert.equal(lines.length, 4, 'en-tête + 3 fichiers MP3');
-  assert.equal(lines[0], 'Artiste;Album;Année;Titre;Format;Débit (kb/s);Fichier (dans le dossier de musique)');
+  assert.equal(lines[0], 'Artiste;Album;Année;Titre;Format;Débit (kb/s);Qualité réelle;Fichier (dans le dossier de musique)');
   // chemin à la façon du système (\ sous Windows), pour le retrouver dans l'explorateur de fichiers
-  assert.match(lines[1], new RegExp(`^Moka;Café Serré;2003;Expresso;MP3;\\d+;Moka - Café Serré\\${path.sep}01 Expresso\\.mp3$`));
+  assert.match(lines[1], new RegExp(`^Moka;Café Serré;2003;Expresso;MP3;\\d+;;Moka - Café Serré\\${path.sep}01 Expresso\\.mp3$`));
   assert.ok(!text.includes(srv.music), 'chemins relatifs au dossier de musique');
 });
 

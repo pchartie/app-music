@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { parseFile } from 'music-metadata';
 import { createRemote } from './lib/remote.js';
 import { toJpeg } from './lib/images.js';
+import { analyseInBackground, albumVerdict } from './lib/spectrum.js';
 import { pickFolder, volumeDirs } from './lib/system.js';
 
 const STARTED_AT = Date.now(); // le lanceur redémarre le serveur si son code est plus récent
@@ -20,6 +21,7 @@ const META = path.join(CACHE, 'meta');
 const ARTIST_IMG = path.join(CACHE, 'artists');
 const LIB_FILE = path.join(CACHE, 'library.json');
 const LOSSY_LOG = path.join(CACHE, 'lossy-log.json'); // journal des albums avec perte (MP3…)
+const QUALITY_FILE = path.join(CACHE, 'quality.json'); // qualité réelle des MP3 (faux 320), lib/spectrum.js
 const ADDED_LOG = path.join(CACHE, 'added.json'); // date d'ajout de chaque album (« Récemment ajoutés »)
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
 const UA = 'AppMusic/1.0 (application musicale locale)';
@@ -201,6 +203,7 @@ async function scan() {
   hitIndex = null;
   if (rescanAfter) { rescanAfter = false; setTimeout(scan, 100); }
   setTimeout(syncMetadata, 1000);
+  setTimeout(analyseQuality, 1500);
   console.log(`Indexation : ${tracks.length} titres, ${albums.size} albums, ${artists.size} artistes en ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 
@@ -247,14 +250,65 @@ async function updateAddedLog() {
   if (changed) await fsp.writeFile(ADDED_LOG, JSON.stringify(log));
   await fsp.writeFile(LIB_FILE, JSON.stringify(library));
 }
+// ---------- Qualité réelle des MP3 (cache/quality.json) ----------
+// trackId -> { sig, cut, drop, verdict } ; sig = taille + date du fichier : un MP3 remplacé est réanalysé.
+// Hors connexion, en arrière-plan après chaque indexation ; les fichiers ne sont que lus.
+let quality = null, qualityRun = null, qualityAgain = false;
+const qualityProgress = { done: 0, total: 0 };
+const isMp3 = (t) => codecName(t) === 'MP3';
+const sigOf = (t) => `${t.size}:${t.mtime}`;
+function loadQuality() {
+  if (!quality) { try { quality = JSON.parse(fs.readFileSync(QUALITY_FILE, 'utf8')); } catch { quality = {}; } }
+  return quality;
+}
+async function analyseQuality() {
+  if (qualityRun) { qualityAgain = true; return qualityRun; }
+  qualityRun = (async () => {
+    const q = loadQuality();
+    const tracks = library.tracks.filter(isMp3);
+    const ids = new Set(tracks.map((t) => t.id));
+    for (const id of Object.keys(q)) if (!ids.has(id)) delete q[id]; // titres disparus
+    const jobs = tracks.filter((t) => q[t.id]?.sig !== sigOf(t)).map((t) => ({ id: t.id, file: t.path, kbps: Math.round((t.bitrate || 0) / 1000), sig: sigOf(t) }));
+    Object.assign(qualityProgress, { done: 0, total: jobs.length });
+    if (!jobs.length) return;
+    console.log(`Qualité réelle : analyse de ${jobs.length} titre(s) MP3…`);
+    const sig = new Map(jobs.map((j) => [j.id, j.sig]));
+    let unsaved = 0;
+    const save = () => fsp.writeFile(QUALITY_FILE, JSON.stringify(q)).catch(() => {});
+    await analyseInBackground(jobs.map(({ sig: _, ...j }) => j), (id, r) => {
+      q[id] = { sig: sig.get(id), ...r };
+      qualityProgress.done++;
+      if (++unsaved >= 25) { unsaved = 0; save(); }
+    });
+    await save();
+    const faux = jobs.filter((j) => q[j.id]?.verdict === 'faux').length, gonfle = jobs.filter((j) => q[j.id]?.verdict === 'gonfle').length;
+    console.log(`Qualité réelle : terminé (${faux} faux, ${gonfle} gonflé(s))`);
+  })().finally(() => { qualityRun = null; if (qualityAgain) { qualityAgain = false; analyseQuality(); } });
+  return qualityRun;
+}
+// Verdict d'un album (null : pas de MP3, ou pas encore analysé)
+function albumQuality(a) {
+  const q = loadQuality(), byId = new Map(library.tracks.map((t) => [t.id, t]));
+  const tracks = a.tracks.map((id) => byId.get(id)).filter((t) => t && isMp3(t));
+  if (!tracks.length) return null;
+  const v = albumVerdict(tracks.map((t) => (q[t.id]?.sig === sigOf(t) ? q[t.id] : null)));
+  if (!v) return null;
+  const kbps = tracks.map((t) => Math.round((t.bitrate || 0) / 1000)).sort((x, y) => x - y);
+  return { ...v, kbps: kbps[Math.floor(kbps.length / 2)], tracks: tracks.length };
+}
+const qualityLabel = (r) => (!r?.verdict ? '' : r.verdict === 'ok' ? 'conforme' : `${r.verdict === 'faux' ? 'faux' : 'gonflé'} (coupure à ${(r.cut / 1000).toLocaleString('fr-FR')} kHz)`);
+
 const csvCell = (v) => { const s = v == null ? '' : String(v); return /[;"\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
 function lossyCsv() {
   const albums = new Map(library.albums.map((a) => [a.id, a]));
   const rows = library.tracks.filter((t) => !t.lossless)
     .sort((x, y) => x.albumArtist.localeCompare(y.albumArtist, 'fr') || x.album.localeCompare(y.album, 'fr') || x.disc - y.disc || x.trackNo - y.trackNo)
-    .map((t) => [t.albumArtist, albums.get(t.albumId)?.title || t.album, t.year, t.title, codecName(t), t.bitrate ? Math.round(t.bitrate / 1000) : '', path.relative(MUSIC_DIR, t.path)]);
+    .map((t) => {
+      const q = isMp3(t) && loadQuality()[t.id]?.sig === sigOf(t) ? loadQuality()[t.id] : null;
+      return [t.albumArtist, albums.get(t.albumId)?.title || t.album, t.year, t.title, codecName(t), t.bitrate ? Math.round(t.bitrate / 1000) : '', qualityLabel(q), path.relative(MUSIC_DIR, t.path)];
+    });
   // point-virgule + BOM : s'ouvre directement dans Numbers et dans Excel en français
-  return '\ufeff' + [['Artiste', 'Album', 'Année', 'Titre', 'Format', 'Débit (kb/s)', 'Fichier (dans le dossier de musique)'], ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n';
+  return '\ufeff' + [['Artiste', 'Album', 'Année', 'Titre', 'Format', 'Débit (kb/s)', 'Qualité réelle', 'Fichier (dans le dossier de musique)'], ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n') + '\r\n';
 }
 
 // Un album = un dossier (les sous-dossiers CD1/CD2 remontent au parent) + un titre.
@@ -726,7 +780,8 @@ async function handle(req, res, lan = false) {
     if (p === '/api/lossy') {
       const log = await readLossyLog();
       return json(res, {
-        albums: library.albums.filter((a) => a.lossy).map((a) => ({ id: a.id, firstSeen: log[a.id]?.firstSeen || null })),
+        albums: library.albums.filter((a) => a.lossy).map((a) => ({ id: a.id, firstSeen: log[a.id]?.firstSeen || null, quality: albumQuality(a) })),
+        analysis: { ...qualityProgress, running: !!qualityRun },
         history: Object.entries(log).filter(([, e]) => e.resolvedAt).map(([id, e]) => ({ id, ...e })).sort((x, y) => y.resolvedAt.localeCompare(x.resolvedAt)),
         files: library.tracks.filter((t) => !t.lossless).length,
       });
