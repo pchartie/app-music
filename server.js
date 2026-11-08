@@ -190,15 +190,18 @@ async function scan() {
     ar.genres = [...ar.genres];
   }
 
-  library = {
+  const next = {
     albums: [...albums.values()].sort((x, y) => x.artist.localeCompare(y.artist, 'fr') || (x.year || 0) - (y.year || 0)),
     artists: [...artists.values()].sort((x, y) => x.name.localeCompare(y.name, 'fr')),
     tracks,
     scannedAt: new Date().toISOString(),
   };
+  // la nouvelle bibliothèque n'est publiée qu'une fois complète (dates d'ajout comprises) : une requête
+  // pendant la réindexation voit l'ancienne, jamais une version à moitié prête
+  await updateAddedLog(next).catch((e) => console.warn('Journal des ajouts :', e.message));
+  library = next;
   await fsp.writeFile(LIB_FILE, JSON.stringify(library));
   await updateLossyLog().catch((e) => console.warn('Journal MP3 :', e.message));
-  await updateAddedLog().catch((e) => console.warn('Journal des ajouts :', e.message));
   scanning = false;
   hitIndex = null;
   if (rescanAfter) { rescanAfter = false; setTimeout(scan, 100); }
@@ -236,19 +239,18 @@ async function updateLossyLog() {
 }
 // Date d'ajout : au tout premier passage, celle du dossier ; ensuite, le moment où l'app découvre l'album
 // (un album recopié depuis une vieille sauvegarde garde sa date de dossier, mais il est bien « récent » ici).
-async function updateAddedLog() {
+async function updateAddedLog(lib) {
   let log = null;
   try { log = JSON.parse(await fsp.readFile(ADDED_LOG, 'utf8')); } catch {}
   const seeding = !log; log ||= {};
   const now = new Date().toISOString();
   let changed = seeding;
-  for (const a of library.albums) {
+  for (const a of lib.albums) {
     if (!log[a.id]) { log[a.id] = seeding ? new Date(a.born).toISOString() : now; changed = true; }
     a.added = log[a.id];
     delete a.born;
   }
   if (changed) await fsp.writeFile(ADDED_LOG, JSON.stringify(log));
-  await fsp.writeFile(LIB_FILE, JSON.stringify(library));
 }
 // ---------- Qualité réelle des MP3 (cache/quality.json) ----------
 // trackId -> { sig, cut, drop, verdict } ; sig = taille + date du fichier : un MP3 remplacé est réanalysé.

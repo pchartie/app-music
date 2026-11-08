@@ -3,7 +3,7 @@ import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { startServer } from './helpers.js';
+import { startServer, sleep } from './helpers.js';
 import { EXPECTED, fingerprint, flac, mp3 } from './fixtures.js';
 
 let srv, lib, printBefore;
@@ -183,6 +183,21 @@ test('journal : date de repérage conservée, historique après remplacement par
   assert.ok(l.history[0].resolvedAt >= first.firstSeen);
   fs.rmSync(dir, { recursive: true });
   await rescan();
+});
+
+test('pendant une réindexation, la bibliothèque servie est toujours complète (jamais d’album sans date d’ajout)', async () => {
+  let stop = false, seen = 0;
+  const bad = [];
+  const poll = (async () => {
+    while (!stop) {
+      const l = (await srv.api('/api/library')).body; seen++;
+      if (!l.albums.every((a) => a.added && a.born === undefined)) bad.push(l.scannedAt);
+    }
+  })();
+  for (let i = 0; i < 4; i++) { await srv.api('/api/rescan', { method: 'POST' }); await sleep(30); await srv.waitIndexed(); }
+  stop = true; await poll;
+  assert.ok(seen > 10, `${seen} réponses`);
+  assert.deepEqual(bad, []);
 });
 
 test('récemment ajoutés : date d’ajout de chaque album, conservée, et datée à la découverte pour un nouvel album', async () => {
