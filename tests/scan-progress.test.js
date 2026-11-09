@@ -36,11 +36,12 @@ test('première indexation : barre de progression (fichiers puis pochettes), pui
     const dir = path.join(music, `Groupe ${a} - Album ${a}`); fs.mkdirSync(dir);
     for (let t = 1; t <= 12; t++) fs.writeFileSync(path.join(dir, `${t} Titre.mp3`), mp3({ tags: { title: `Titre ${t}`, artist: `Groupe ${a}`, album: `Album ${a}`, track: t } }));
   }
-  // 120 fichiers × 250 ms, 8 à la fois : ≈ 4 s de lecture, le temps de voir la barre avancer
-  const srv = await startServer({ music, wait: false, env: { APPMUSIC_SCAN_DELAY: '250' } });
+  // navigateur prêt avant le serveur (son démarrage prend plusieurs secondes sur les machines de test en ligne) ;
+  // 120 fichiers × 500 ms, 8 à la fois : ≈ 8 s de lecture, le temps de voir la barre avancer
   const browser = await chromium.launch({ executablePath, headless: true });
+  const page = await browser.newPage();
+  const srv = await startServer({ music, wait: false, env: { APPMUSIC_SCAN_DELAY: '500' } });
   try {
-    const page = await browser.newPage();
     for (let i = 0; i < 100; i++) { try { await srv.api('/api/status'); break; } catch { await sleep(100); } }
     await page.goto(srv.url + '/');
     await page.waitForSelector('.scan-wait #scan-bar');

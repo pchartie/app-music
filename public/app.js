@@ -1360,10 +1360,13 @@ function scanMeter() {
   let r = await loadLibrary();
   if (r.needsSetup) { await showSetup(); r = await loadLibrary(); }
   // première indexation pas finie (app relancée en cours de route) : même barre que l'écran d'accueil
-  if (r.scanning && !r.albums.length) {
+  // (aussi juste avant qu'elle commence : jamais indexée, rien à montrer encore)
+  const indexing = (x) => (x.scanning || !x.scannedAt) && !x.albums.length;
+  if (indexing(r)) {
     const meter = scanMeter();
     view.innerHTML = `<div class="scan-wait"><h2>Indexation de la musique</h2><div class="setup-bar"><i id="scan-bar"></i></div><p class="setup-status" id="scan-status"></p></div>`;
-    while (r.scanning && !r.albums.length) {
+    // sans indexation qui démarre (dossier introuvable…) : on n'attend pas indéfiniment
+    for (let idle = 0; indexing(r) && idle < 8; idle = r.scanning ? 0 : idle + 1) {
       const m = meter(r); $('#scan-bar').style.width = `${m.pct.toFixed(1)}%`; $('#scan-status').textContent = m.text;
       await new Promise((s) => setTimeout(s, 1000)); r = await loadLibrary();
     }
