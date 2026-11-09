@@ -76,6 +76,22 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     await page.waitForFunction(() => document.body.classList.contains('paused'));
   });
 
+  test('page Résultats : double-clic sur un titre, seul ce titre est lu (pas toute la liste)', async () => {
+    await go('#/search/moka', '#songs-box tr[data-track]');
+    const rows = await page.$$('#songs-box tr[data-track]');
+    assert.ok(rows.length > 2, 'plusieurs titres trouvés');
+    const id = await rows[1].getAttribute('data-track');
+    await rows[1].dblclick();
+    await page.waitForFunction((t) => JSON.parse(localStorage.getItem('dq.session') || '{}').queue?.[0] === t, id);
+    assert.deepEqual(JSON.parse(await page.evaluate(() => localStorage.getItem('dq.session'))).queue, [id]);
+    // au clavier (OK) : pareil
+    await page.focus('#songs-box tr[data-track][data-n="2"]'); await page.keyboard.press('Enter');
+    const id2 = await page.getAttribute('#songs-box tr[data-track][data-n="2"]', 'data-track');
+    await page.waitForFunction((t) => JSON.parse(localStorage.getItem('dq.session') || '{}').queue?.[0] === t, id2);
+    assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem('dq.session'))).queue.length, 1);
+    await page.click('#b-play'); await page.waitForFunction(() => document.body.classList.contains('paused'));
+  });
+
   test('lecteur : boîtier avec CD, progression aux couleurs de la pochette, carte « Ensuite »', async () => {
     const titles = ['Minuit pile', 'Boulevard désert', 'Néons', 'Aube'];
     const cur = await page.textContent('#p-title');

@@ -739,7 +739,8 @@ function viewTracks(_, filtered) {
     table.addEventListener('click', (e) => {
       const hd = e.target.closest('th'); if (hd) { sort = { k: hd.dataset.k, d: sort.k === hd.dataset.k ? -sort.d : 1 }; store.set('trackSort', sort); render(); return; }
       if (e.target.closest('a')) return;
-      const tr = e.target.closest('tr[data-track]'); if (tr && e.detail !== 1) player.playList(ids, +tr.dataset.n); // double-clic, ou OK au clavier
+      // double-clic, ou OK au clavier : page Titres, le titre puis la suite de la liste ; résultats de recherche, ce titre seul
+      const tr = e.target.closest('tr[data-track]'); if (tr && e.detail !== 1) player.playList(filtered ? [tr.dataset.track] : ids, filtered ? 0 : +tr.dataset.n);
     });
   };
   if (filtered) return render;

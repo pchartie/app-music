@@ -181,7 +181,10 @@ test('page fermée sur l’ordinateur : « Ouvrir sur le Mac », puis la command
   await phone.waitForSelector('#banner:not([hidden]) #open-pc');
   await phone.tap('#open-pc');
   await phone.waitForFunction(() => /Ouverture/.test(document.querySelector('#banner').textContent));
-  assert.equal(fs.readFileSync(openLog, 'utf8').trim().split('\n').pop(), `http://localhost:${srv.port}/`);
+  // « Ouverture… » s'affiche dès le clic, avant la réponse du serveur : on attend que l'adresse soit notée
+  const opened = () => { try { return fs.readFileSync(openLog, 'utf8').trim().split('\n').pop(); } catch { return ''; } };
+  for (let i = 0; i < 100 && !opened(); i++) await sleep(50);
+  assert.equal(opened(), `http://localhost:${srv.port}/`);
   // … l'ordinateur ouvre la page (ici, le test joue le rôle du navigateur) et la lecture démarre
   mac = await macCtx.newPage();
   await mac.goto(srv.url + '/');
