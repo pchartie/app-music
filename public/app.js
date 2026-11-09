@@ -563,6 +563,20 @@ function viewAlbums() {
 
 // ---------- Album ----------
 const STAR = '<span class="hit" title="Titre très connu">★</span>';
+// étoile d'une ligne de titre : cliquable (ou touche *) pour l'ajouter ou la retirer à la main
+const starBtn = (t) => t.hit ? '<span class="hit" data-star title="Titre très connu · cliquer ou * pour retirer l\'étoile">★</span>'
+  : '<span class="hit off" data-star title="Ajouter une étoile (*)" aria-label="Ajouter une étoile"></span>';
+async function toggleStar(id) {
+  const t = T.get(id); if (!t) return;
+  const r = await fetch('/api/star', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, star: !t.hit }) }).then((x) => x.json()).catch(() => null);
+  if (!r?.hits) return toast('Impossible de modifier l\'étoile');
+  for (const [tid, hit] of Object.entries(r.hits)) {
+    const x = T.get(tid); if (!x) continue;
+    x.hit = hit;
+    $$(`tr[data-track="${tid}"] [data-star]`).forEach((el) => el.outerHTML = starBtn(x));
+  }
+  mixCache = null; // « Les classiques » suit les étoiles
+}
 // titre affiché sans les mentions techniques (« - Remastered 2021 », « (Remaster) »)
 const showTitle = (t) => t.replace(/\s*[-–]\s*(\d{4}\s*)?(remaster(ed)?|digital remaster|mono|stereo)(\s+(version|\d{4}))*\s*$/i, '').replace(/\s*[(\[](\d{4}\s*)?(remaster(ed)?|digitally remastered|remastered \d{4}|\d{4} remaster(ed)?)[^)\]]*[)\]]/i, '').trim() || t;
 function trackRows(ids, { showArtist, albumArtist, showAlbum, rank, discs = true } = {}) {
@@ -573,7 +587,7 @@ function trackRows(ids, { showArtist, albumArtist, showAlbum, rank, discs = true
     const feat = showArtist || (albumArtist && t.artist !== albumArtist);
     return `${head}<tr class="tr ${player.current === id ? 'playing' : ''}" data-track="${id}" data-n="${n}" draggable="true">
       <td><span class="num">${rank ? n + 1 : t.trackNo || n + 1}</span><span class="num-play">${ICON.play}</span>${ICON.eq}</td>
-      <td><div class="tt">${esc(showTitle(t.title))}${t.hit ? STAR : ''}</div>${showAlbum && showArtist ? `<div class="ta">${esc(t.artist)} · ${esc(t.album)}</div>` : showAlbum ? `<div class="ta">${esc(t.album)}</div>` : feat ? `<div class="ta">${esc(t.artist)}</div>` : ''}</td>
+      <td><div class="tt">${esc(showTitle(t.title))}${starBtn(t)}</div>${showAlbum && showArtist ? `<div class="ta">${esc(t.artist)} · ${esc(t.album)}</div>` : showAlbum ? `<div class="ta">${esc(t.album)}</div>` : feat ? `<div class="ta">${esc(t.artist)}</div>` : ''}</td>
       <td>${fmtTime(t.duration)}</td></tr>`;
   }).join('');
 }
@@ -725,7 +739,7 @@ function viewTracks(_, filtered) {
     const html = `<table class="songs"><colgroup><col style="width:38%"><col style="width:22%"><col style="width:26%"><col style="width:7%"><col style="width:7%"></colgroup>
       <thead><tr>${th('title', 'Titre')}${th('artist', 'Artiste')}${th('album', 'Album')}${th('year', 'Année', 'r')}${th('duration', 'Durée', 'r')}</tr></thead>
       <tbody>${list.map((t, n) => `<tr data-track="${t.id}" data-n="${n}" draggable="true" class="${player.current === t.id ? 'playing' : ''}">
-        <td><div class="cell-title"><img loading="lazy" src="${cover(t.albumId)}" alt=""><span class="tt">${esc(showTitle(t.title))}</span>${t.hit ? STAR : ''}</div></td>
+        <td><div class="cell-title"><img loading="lazy" src="${cover(t.albumId)}" alt=""><span class="tt">${esc(showTitle(t.title))}</span>${starBtn(t)}</div></td>
         <td><a href="#/artist/${t.artistId}">${esc(t.artist)}</a></td><td><a href="#/album/${t.albumId}">${esc(t.album)}</a></td>
         <td class="r">${t.year || ''}</td><td class="r">${fmtTime(t.duration)}</td></tr>`).join('')}</tbody></table>`;
     return { html, ids };
@@ -1128,6 +1142,12 @@ function adjustSlider(el, dir) {
   if (el.id === 'volume') { const v = Math.max(0, Math.min(1, audio.volume + step * 0.05)); audio.volume = v; setSlider(el, v); store.set('volume', v); }
   else if (audio.duration) audio.currentTime = Math.max(0, Math.min(audio.duration - 1, audio.currentTime + step * 10));
 }
+// clic sur l'étoile d'une ligne : ne lance pas la lecture
+for (const type of ['click', 'dblclick']) window.addEventListener(type, (e) => {
+  const st = e.target.closest?.('[data-star]'); if (!st) return;
+  e.stopPropagation(); e.preventDefault();
+  if (type === 'click' && e.detail <= 1) toggleStar(st.closest('[data-track]').dataset.track);
+}, true);
 window.addEventListener('keydown', (e) => {
   const inInput = e.target.matches('input, textarea');
   const k = e.key;
@@ -1144,6 +1164,9 @@ window.addEventListener('keydown', (e) => {
     if (k === 'ArrowUp' || (k === 'ArrowLeft' && e.target.selectionStart === 0 && !e.target.value)) { e.preventDefault(); nav.move(k === 'ArrowUp' ? 'up' : 'left'); }
     return;
   }
+  // * sur une ligne de titre : ajouter ou retirer son étoile
+  const row = document.activeElement?.closest?.('tr[data-track]');
+  if (row && k === '*') { e.preventDefault(); return toggleStar(row.dataset.track); }
   // Suppr (ou retour arrière) sur un titre à venir de « À suivre » : le retirer de la file
   const qItem = document.activeElement?.closest?.('#queue-list .q-item[draggable]');
   if (qItem && (k === 'Delete' || k === 'Backspace')) { e.preventDefault(); return removeFromQueue(+qItem.dataset.q); }

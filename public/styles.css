@@ -48,7 +48,13 @@ img { display: block; }
   z-index: 5;
 }
 .brand { display: flex; align-items: center; gap: 13px; padding: 0 8px; font: 650 22px/1 -apple-system, "SF Pro Display", sans-serif; letter-spacing: -.01em; }
-.brand-mark { width: 48px; height: 48px; flex: none; filter: drop-shadow(0 4px 9px rgba(250, 45, 72, .35)); }
+.brand-mark { width: 48px; height: 48px; flex: none; filter: drop-shadow(0 4px 14px rgba(250, 45, 72, .55)); animation: brand-pulse 2.4s ease-in-out infinite; }
+/* battement doux du logo : il grossit un peu et son halo rouge s'étend */
+@keyframes brand-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 4px 14px rgba(250, 45, 72, .55)); }
+  50% { transform: scale(1.06); filter: drop-shadow(0 4px 22px rgba(250, 45, 72, .85)); }
+}
+@media (prefers-reduced-motion: reduce) { .brand-mark { animation: none; } }
 .search { display: flex; align-items: center; gap: 7px; background: var(--hover); border-radius: 9px; padding: 0 10px; height: 32px; margin: 0 4px; border: 1px solid transparent; transition: border-color .2s, background .2s; }
 .search:focus-within { border-color: var(--accent); background: var(--bg); }
 .search svg { width: 14px; height: 14px; color: var(--text-2); flex: none; }
@@ -504,6 +510,11 @@ body.flow-mode .lib-card { background: rgba(255, 255, 255, .04); }
 
 /* ---------- Titres très connus ---------- */
 .hit { display: inline-block; margin-left: 8px; color: #ff6b81; font-size: 12px; transform: translateY(-1px); }
+[data-star] { cursor: pointer; }
+.hit.off { color: var(--text-2); opacity: 0; transition: opacity .15s; }
+.hit.off::before { content: '☆'; } /* dessinée en CSS : hors du texte du titre */
+tr:hover .hit.off, tr:focus .hit.off, tr:focus-within .hit.off { opacity: .7; }
+.hit.off:hover { opacity: 1 !important; color: #ff6b81; }
 .tracklist.popular .tt { font-weight: 500; }
 
 /* ---------- Page Rechercher : tuiles ---------- */

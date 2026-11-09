@@ -149,6 +149,7 @@ entrantes (acceptez ; sous Windows, pour les réseaux **privés**) ; un VPN peut
 | Espace / ⏯ | Lecture / pause |
 | ⏭ ⏮, ⌘→ ⌘← | Titre suivant / précédent |
 | Une lettre | Commencer une recherche |
+| * (sur un titre) | Ajouter ou retirer son étoile ★ (aussi en cliquant dessus) |
 
 Sur le curseur de position ou de volume, ← et → avancent de 10 s ou règlent le volume.
 

@@ -25,6 +25,7 @@ const LIB_FILE = path.join(CACHE, 'library.json');
 const LOSSY_LOG = path.join(CACHE, 'lossy-log.json'); // journal des albums avec perte (MP3…)
 const QUALITY_FILE = path.join(CACHE, 'quality.json'); // qualité réelle des MP3 (faux 320), lib/spectrum.js
 const ADDED_LOG = path.join(CACHE, 'added.json'); // date d'ajout de chaque album (« Récemment ajoutés »)
+const STARS_FILE = path.join(CACHE, 'stars.json'); // étoiles ajoutées ou retirées à la main (« artiste|titre » -> true/false)
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
 const UA = 'AppMusic/1.0 (application musicale locale)';
 const CONFIG_FILE = process.env.APPMUSIC_CONFIG || path.join(ROOT, 'config.json'); // propre à chaque machine, ignoré par Git
@@ -653,9 +654,22 @@ function hitRank(t) {
       hitIndex.set(ar.id, m);
     }
   }
-  if (/instrumental|karaok|a ?cappella|remix|demo\b/i.test(t.title)) return 0;
-  const r = hitIndex.get(t.artistId)?.get(baseSong(t.title)) || 0;
-  return r >= HIT_RANK ? r : 0;
+  const r = /instrumental|karaok|a ?cappella|remix|demo\b/i.test(t.title) ? 0 : hitIndex.get(t.artistId)?.get(baseSong(t.title)) || 0;
+  const auto = r >= HIT_RANK ? r : 0;
+  const s = stars[starKey(t)];
+  return s === undefined ? auto : s ? auto || HIT_RANK : 0; // étoile ajoutée à la main : rang le plus bas des classiques
+}
+// Étoiles choisies à la main : par artiste et titre (toutes les versions d'un même morceau, comme le classement Deezer)
+let stars = {};
+try { stars = JSON.parse(fs.readFileSync(STARS_FILE, 'utf8')); } catch {}
+const starKey = (t) => t.artistId + '|' + baseSong(t.title);
+function setStar(t, on) {
+  const key = starKey(t);
+  delete stars[key];
+  if (!!hitRank(t) !== on) stars[key] = on; // seulement si différent du classement automatique
+  fs.mkdirSync(CACHE, { recursive: true });
+  fs.writeFileSync(STARS_FILE, JSON.stringify(stars, null, 1));
+  return Object.fromEntries(library.tracks.filter((x) => starKey(x) === key).map((x) => [x.id, hitRank(x)]));
 }
 // Nettoyage : les articles complets ne sont plus conservés (seule la première phrase est affichée)
 for (const [key, m] of metaMem) if (m?.wiki?.full !== undefined) { delete m.wiki.full; saveMeta(key, m); }
@@ -831,6 +845,13 @@ async function handle(req, res, lan = false) {
       qualityEnabled = !!enabled;
       if (enabled) analyseQuality(); else { qualityAgain = false; qualityStop?.abort(); }
       return json(res, { enabled: !!enabled });
+    }
+    // étoile d'un titre : { id, star: true|false } ; renvoie { hits: { id du titre: rang } } pour toutes ses versions
+    if (p === '/api/star' && req.method === 'POST') {
+      const { id, star } = JSON.parse((await readBody(req, 1e4)).toString() || '{}');
+      const t = library.tracks.find((x) => x.id === id);
+      if (!t) return json(res, { error: 'titre introuvable' }, 404);
+      return json(res, { hits: setStar(t, !!star) });
     }
     if (p === '/api/rescan' && req.method === 'POST') { scan(); return json(res, { ok: true }); }
     if (p === '/api/setup' && req.method === 'GET') return json(res, { musicDir: MUSIC_DIR, label: tilde(MUSIC_DIR), fromEnv: !!process.env.MUSIC_DIR, candidates: await candidates() });

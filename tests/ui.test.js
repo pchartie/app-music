@@ -202,6 +202,7 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.match(icon.body.toString(), /<svg[\s\S]*<ellipse/, 'la note de musique');
     assert.equal(await page.getAttribute('link[rel="icon"]', 'href'), 'icon.svg');
     assert.equal(await page.$eval('.brand-mark', (img) => [img.getAttribute('src'), img.naturalWidth > 0]).then(([src, ok]) => src === 'icon.svg' && ok), true);
+    assert.equal(await page.$eval('.brand-mark', (e) => getComputedStyle(e).animationName), 'brand-pulse', 'le logo bat doucement');
     const fs = await page.$eval('#search', (e) => parseFloat(getComputedStyle(e).fontSize));
     assert.ok(fs >= 14, `taille du texte de recherche : ${fs}px`);
   });
@@ -337,6 +338,36 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.equal(await page.$eval('.card[data-album] .tilt', (e) => getComputedStyle(e).transformStyle), 'preserve-3d');
     assert.match(await page.$eval('.card[data-album] .tilt', (e) => e.style.transform), /^perspective\(900px\) rotateX/);
     await page.mouse.move(2, 2);
+  });
+
+  test('étoile ajoutée ou retirée à la main : clic ou touche *, gardée au redémarrage', async () => {
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'appmusic-stars-'));
+    const music = makeLibrary(path.join(cache, '..', path.basename(cache) + '-music'));
+    let s2 = await startServer({ music, cache });
+    const nb = (await s2.api('/api/library')).body.albums.find((a) => a.title === 'Nuit Blanche');
+    await s2.stop();
+    fs.writeFileSync(path.join(cache, 'meta', `top-${nb.artistId}.json`), JSON.stringify({ tracks: [{ title: 'Boulevard désert', rank: 950000 }] }));
+    s2 = await startServer({ music, cache });
+    const p2 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const row = (t) => `.tracklist tr[data-track]:has(.tt:text-is("${t}"))`;
+    const starred = () => p2.$$eval('.tracklist tr[data-track]', (els) => els.filter((e) => e.querySelector('.hit:not(.off)')).map((e) => e.querySelector('.tt').firstChild.textContent));
+    try {
+      await p2.goto(s2.url + `/#/album/${nb.id}`); await p2.waitForSelector('.tracklist tr[data-track]');
+      assert.deepEqual(await starred(), ['Boulevard désert']);
+      // clic sur l'étoile vide : ajoutée, sans lancer la lecture
+      await p2.hover(row('Minuit pile')); await p2.click(`${row('Minuit pile')} [data-star]`);
+      await p2.waitForFunction(() => document.querySelectorAll('.tracklist .hit:not(.off)').length === 2);
+      assert.deepEqual((await starred()).sort(), ['Boulevard désert', 'Minuit pile']);
+      assert.equal(await p2.textContent('#p-title'), 'Aucune lecture');
+      // touche * sur la ligne : retire l'étoile du classement automatique
+      await p2.focus(row('Boulevard désert')); await p2.keyboard.press('*');
+      await p2.waitForFunction(() => document.querySelectorAll('.tracklist .hit:not(.off)').length === 1);
+      assert.deepEqual(await starred(), ['Minuit pile']);
+      await s2.stop({ keep: true });
+      s2 = await startServer({ music, cache });
+      const hits = (await s2.api('/api/library')).body.tracks.filter((t) => t.hit).map((t) => t.title);
+      assert.deepEqual(hits, ['Minuit pile']);
+    } finally { await p2.close(); await s2.stop(); for (const d of [cache, music]) fs.rmSync(d, { recursive: true, force: true }); }
   });
 });
 
