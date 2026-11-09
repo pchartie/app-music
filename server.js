@@ -38,6 +38,11 @@ if (process.env.APPMUSIC_OFFLINE) globalThis.fetch = async () => { throw new Typ
 for (const d of [CACHE, COVERS, META, ARTIST_IMG]) fs.mkdirSync(d, { recursive: true });
 // Installations antérieures à l'écran d'accueil : la musique était lue dans ~/Downloads
 if (!MUSIC_DIR && fs.existsSync(LIB_FILE)) { MUSIC_DIR = path.join(os.homedir(), 'Downloads'); writeConfig({ musicDir: MUSIC_DIR }); }
+// Analyse de la qualité réelle des MP3 : facultative (longue sur une grande bibliothèque), désactivée pour une nouvelle installation ;
+// gardée pour une installation qui l'utilisait déjà (résultats présents)
+if (readConfig().qualityCheck === undefined && fs.existsSync(QUALITY_FILE)) writeConfig({ ...readConfig(), qualityCheck: true });
+let qualityEnabled = readConfig().qualityCheck === true;
+const qualityOn = () => qualityEnabled;
 
 // Premier lancement : crée le raccourci de l'app (bureau et menu des applications, selon le système), une seule fois
 // (s'il est supprimé ensuite, il n'est pas recréé). Pas pour les instances de test (APPMUSIC_CONFIG).
@@ -261,7 +266,7 @@ async function updateAddedLog(lib) {
 // ---------- Qualité réelle des MP3 (cache/quality.json) ----------
 // trackId -> { sig, cut, drop, verdict } ; sig = taille + date du fichier : un MP3 remplacé est réanalysé.
 // Hors connexion, en arrière-plan après chaque indexation ; les fichiers ne sont que lus.
-let quality = null, qualityRun = null, qualityAgain = false;
+let quality = null, qualityRun = null, qualityAgain = false, qualityStop = null;
 const qualityProgress = { done: 0, total: 0 };
 const isMp3 = (t) => codecName(t) === 'MP3';
 const sigOf = (t) => `${t.size}:${t.mtime}`;
@@ -270,6 +275,7 @@ function loadQuality() {
   return quality;
 }
 async function analyseQuality() {
+  if (!qualityOn()) return;
   if (qualityRun) { qualityAgain = true; return qualityRun; }
   qualityRun = (async () => {
     const q = loadQuality();
@@ -283,19 +289,21 @@ async function analyseQuality() {
     const sig = new Map(jobs.map((j) => [j.id, j.sig]));
     let unsaved = 0;
     const save = () => fsp.writeFile(QUALITY_FILE, JSON.stringify(q)).catch(() => {});
+    qualityStop = new AbortController();
     await analyseInBackground(jobs.map(({ sig: _, ...j }) => j), (id, r) => {
       q[id] = { sig: sig.get(id), ...r };
       qualityProgress.done++;
       if (++unsaved >= 25) { unsaved = 0; save(); }
-    });
+    }, { signal: qualityStop.signal });
     await save();
     const faux = jobs.filter((j) => q[j.id]?.verdict === 'faux').length, gonfle = jobs.filter((j) => q[j.id]?.verdict === 'gonfle').length;
     console.log(`Qualité réelle : terminé (${faux} faux, ${gonfle} gonflé(s))`);
-  })().finally(() => { qualityRun = null; if (qualityAgain) { qualityAgain = false; analyseQuality(); } });
+  })().finally(() => { qualityRun = null; qualityStop = null; if (qualityAgain) { qualityAgain = false; analyseQuality(); } });
   return qualityRun;
 }
 // Verdict d'un album (null : pas de MP3, ou pas encore analysé)
 function albumQuality(a) {
+  if (!qualityOn()) return null;
   const q = loadQuality(), byId = new Map(library.tracks.map((t) => [t.id, t]));
   const tracks = a.tracks.map((id) => byId.get(id)).filter((t) => t && isMp3(t));
   if (!tracks.length) return null;
@@ -312,7 +320,7 @@ function lossyCsv() {
   const rows = library.tracks.filter((t) => !t.lossless)
     .sort((x, y) => x.albumArtist.localeCompare(y.albumArtist, 'fr') || x.album.localeCompare(y.album, 'fr') || x.disc - y.disc || x.trackNo - y.trackNo)
     .map((t) => {
-      const q = isMp3(t) && loadQuality()[t.id]?.sig === sigOf(t) ? loadQuality()[t.id] : null;
+      const q = qualityOn() && isMp3(t) && loadQuality()[t.id]?.sig === sigOf(t) ? loadQuality()[t.id] : null;
       return [t.albumArtist, albums.get(t.albumId)?.title || t.album, t.year, t.title, codecName(t), t.bitrate ? Math.round(t.bitrate / 1000) : '', qualityLabel(q), path.relative(MUSIC_DIR, t.path)];
     });
   // point-virgule + BOM : s'ouvre directement dans Numbers et dans Excel en français
@@ -789,7 +797,7 @@ async function handle(req, res, lan = false) {
       const log = await readLossyLog();
       return json(res, {
         albums: library.albums.filter((a) => a.lossy).map((a) => ({ id: a.id, firstSeen: log[a.id]?.firstSeen || null, quality: albumQuality(a) })),
-        analysis: { ...qualityProgress, running: !!qualityRun },
+        analysis: { ...qualityProgress, running: !!qualityRun, enabled: qualityOn(), mp3: library.tracks.filter(isMp3).length },
         history: Object.entries(log).filter(([, e]) => e.resolvedAt).map(([id, e]) => ({ id, ...e })).sort((x, y) => y.resolvedAt.localeCompare(x.resolvedAt)),
         files: library.tracks.filter((t) => !t.lossless).length,
       });
@@ -798,6 +806,14 @@ async function handle(req, res, lan = false) {
       const day = new Date().toISOString().slice(0, 10);
       res.writeHead(200, { 'Content-Type': 'text/csv; charset=utf-8', 'Content-Disposition': `attachment; filename="albums-avec-perte-${day}.csv"`, 'Cache-Control': 'no-store' });
       return res.end(lossyCsv());
+    }
+    // analyse de la qualité réelle : { enabled: true } la lance, { enabled: false } l'arrête (résultats déjà obtenus gardés en cache)
+    if (p === '/api/quality' && req.method === 'POST') {
+      const { enabled } = JSON.parse((await readBody(req, 1e4)).toString() || '{}');
+      writeConfig({ ...readConfig(), qualityCheck: !!enabled });
+      qualityEnabled = !!enabled;
+      if (enabled) analyseQuality(); else { qualityAgain = false; qualityStop?.abort(); }
+      return json(res, { enabled: !!enabled });
     }
     if (p === '/api/rescan' && req.method === 'POST') { scan(); return json(res, { ok: true }); }
     if (p === '/api/setup' && req.method === 'GET') return json(res, { musicDir: MUSIC_DIR, label: tilde(MUSIC_DIR), fromEnv: !!process.env.MUSIC_DIR, candidates: await candidates() });

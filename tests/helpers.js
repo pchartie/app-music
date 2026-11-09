@@ -34,11 +34,11 @@ export function findBrowser() {
 // withMusic: false -> premier lancement, aucun dossier choisi.
 // music / cache : dossiers fournis par l'appelant (gardés à l'arrêt) ; sinon tout est temporaire.
 // env : variables d'environnement en plus (télécommande : faux réseau, port du réseau local…)
-export async function startServer({ withMusic = true, music: givenMusic, cache: givenCache, env: extraEnv = {} } = {}) {
+export async function startServer({ withMusic = true, music: givenMusic, cache: givenCache, config: givenConfig, env: extraEnv = {} } = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'app-music-test-'));
   const music = givenMusic || (withMusic ? makeLibrary(path.join(tmp, 'music')) : null);
   const port = await freePort();
-  const env = { ...process.env, PORT: String(port), APPMUSIC_CACHE: givenCache || path.join(tmp, 'cache'), APPMUSIC_CONFIG: path.join(tmp, 'config.json'), APPMUSIC_OFFLINE: '1', ...extraEnv };
+  const env = { ...process.env, PORT: String(port), APPMUSIC_CACHE: givenCache || path.join(tmp, 'cache'), APPMUSIC_CONFIG: givenConfig || path.join(tmp, 'config.json'), APPMUSIC_OFFLINE: '1', ...extraEnv };
   delete env.MUSIC_DIR;
   if (music) env.MUSIC_DIR = music;
   const child = spawn(process.execPath, ['server.js'], { cwd: ROOT, env, stdio: ['ignore', 'pipe', 'pipe'] });
@@ -55,7 +55,8 @@ export async function startServer({ withMusic = true, music: givenMusic, cache: 
   };
   try { await waitIndexed(); } catch (e) { child.kill(); fs.rmSync(tmp, { recursive: true, force: true }); throw e; }
   return {
-    url, port, tmp, music, cache: env.APPMUSIC_CACHE, api, waitIndexed, logs: () => logs,
-    async stop() { child.kill(); await new Promise((r) => (child.exitCode !== null ? r() : child.once('exit', r))); fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10 }); }, // Windows : fichiers libérés un instant après l'arrêt
+    url, port, tmp, music, cache: env.APPMUSIC_CACHE, configFile: env.APPMUSIC_CONFIG, api, waitIndexed, logs: () => logs,
+    // keep : garde le cache et le réglage (pour relancer un serveur dessus)
+    async stop({ keep = false } = {}) { child.kill(); await new Promise((r) => (child.exitCode !== null ? r() : child.once('exit', r))); if (!keep) fs.rmSync(tmp, { recursive: true, force: true, maxRetries: 10 }); }, // Windows : fichiers libérés un instant après l'arrêt
   };
 }

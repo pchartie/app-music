@@ -100,7 +100,14 @@ test('App Music : analyse après l’indexation, verdict par album, CSV, page «
   const srv = await startServer({ music });
   let browser;
   try {
-    let data;
+    // nouvelle installation : analyse désactivée (longue sur une grande bibliothèque), rien n'est lu
+    await srv.waitIndexed(); await sleep(2000);
+    let data = (await srv.api('/api/lossy')).body;
+    assert.deepEqual([data.analysis.enabled, data.analysis.running, data.analysis.mp3], [false, false, 4]);
+    assert.ok(data.albums.every((a) => !a.quality));
+    assert.ok(!fs.existsSync(path.join(srv.cache, 'quality.json')), 'aucune analyse sans accord');
+    assert.match((await srv.api('/api/lossy.csv')).body.toString('utf8'), /Titre 1 b;MP3;320;;/);
+    await srv.api('/api/quality', { method: 'POST', body: JSON.stringify({ enabled: true }) });
     for (let i = 0; i < 100; i++) { data = (await srv.api('/api/lossy')).body; if (!data.analysis.running && data.albums.every((a) => a.quality)) break; await sleep(100); }
     const lib = (await srv.api('/api/library')).body;
     const q = (title) => data.albums.find((a) => a.id === lib.albums.find((x) => x.title === title).id).quality;
@@ -127,5 +134,43 @@ test('App Music : analyse après l’indexation, verdict par album, CSV, page «
     const cards = await page.$$eval('.lossy-page .card', (cs) => cs.map((c) => [c.querySelector('.card-title').textContent, c.querySelector('.lossy-quality')?.textContent]));
     assert.deepEqual(cards, [['Faux Album', 'Faux 320 kb/s : source ≈ 128 kb/s'], ['Vrai Album', 'Qualité conforme à 320 kb/s']], 'à remplacer en premier');
     assert.match(await page.textContent('#lossy-quality-sum'), /Qualité réelle : 1 faux, 1 conforme\./);
+
+    // désactivée depuis la page (au clavier) : verdicts masqués, bouton pour relancer avec une estimation de durée
+    await page.focus('[data-quality="off"]'); await page.keyboard.press('Enter');
+    await page.waitForSelector('[data-quality="on"]');
+    assert.equal(await page.$$eval('.lossy-quality', (e) => e.length), 0);
+    assert.match(await page.textContent('#lossy-quality-sum'), /non analysée.*4 titres MP3, compter environ une minute/s);
+    assert.ok(await page.$eval('[data-quality="on"]', (b) => b === document.activeElement), 'le focus reste sur le bouton');
+    assert.equal(JSON.parse(fs.readFileSync(srv.configFile, 'utf8')).qualityCheck, false);
+    // relancée : les résultats en cache reviennent tout de suite
+    await page.keyboard.press('Enter');
+    await page.waitForSelector('.lossy-quality');
+    assert.equal(await page.$$eval('.lossy-quality', (e) => e.length), 2);
   } finally { await browser?.close(); await srv.stop(); }
+});
+
+test('analyse en cours arrêtée à la demande ; installation existante (résultats présents) : reste activée', async () => {
+  const music = path.join(tmp, 'music-long');
+  fs.mkdirSync(path.join(music, 'Bruit Rose - Long (2022)'), { recursive: true });
+  for (let i = 1; i <= 40; i++) fs.copyFileSync(path.join(tmp, 'faux320.mp3'), path.join(music, 'Bruit Rose - Long (2022)', `${String(i).padStart(2, '0')} Piste ${i}.mp3`));
+  let srv = await startServer({ music });
+  const cache = srv.cache, config = srv.configFile;
+  try {
+    await srv.waitIndexed();
+    await srv.api('/api/quality', { method: 'POST', body: JSON.stringify({ enabled: true }) });
+    assert.equal((await srv.api('/api/lossy')).body.analysis.running, true);
+    await srv.api('/api/quality', { method: 'POST', body: JSON.stringify({ enabled: false }) });
+    let a;
+    for (let i = 0; i < 50; i++) { a = (await srv.api('/api/lossy')).body.analysis; if (!a.running) break; await sleep(100); }
+    assert.deepEqual([a.running, a.enabled], [false, false]);
+    assert.ok(a.done < 40, `arrêtée avant la fin (${a.done}/40)`);
+  } finally { await srv.stop({ keep: true }); }
+  // installation antérieure à l'option : un cache d'analyse existe, pas de réglage → l'analyse reste active
+  const c = JSON.parse(fs.readFileSync(config, 'utf8')); delete c.qualityCheck; fs.writeFileSync(config, JSON.stringify(c));
+  fs.writeFileSync(path.join(cache, 'quality.json'), '{}');
+  srv = await startServer({ music, cache, config });
+  try {
+    assert.equal((await srv.api('/api/lossy')).body.analysis.enabled, true);
+    assert.equal(JSON.parse(fs.readFileSync(config, 'utf8')).qualityCheck, true);
+  } finally { await srv.stop(); fs.rmSync(path.dirname(config), { recursive: true, force: true, maxRetries: 5 }); }
 });

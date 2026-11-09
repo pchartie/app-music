@@ -109,8 +109,11 @@ Le bouton **Télécharger la liste des fichiers** donne un CSV (Numbers, Excel) 
 plus élevé. L'encodeur coupe les aigus selon son débit (≈ 16 kHz à 128 kb/s, ≈ 19 kHz à 192, 20 kHz et plus à 320) et un
 réencodage garde la coupure de la source : l'app mesure donc, sur le spectre de chaque MP3, où s'arrêtent les aigus.
 Chaque album reçoit un verdict, **faux** (source ≤ 160 kb/s), **gonflé** (source ≈ 192) ou **conforme**, et la page
-classe les albums à remplacer en premier. L'analyse se fait en arrière-plan après chaque indexation (environ une minute pour
-350 titres), sans connexion ; les fichiers ne sont que lus, et un titre n'est réanalysé que s'il change. Le CSV donne le verdict de chaque titre.
+classe les albums à remplacer en premier. L'analyse est **facultative** : désactivée à l'installation, elle se lance avec le
+bouton **Analyser la qualité réelle** de la page, qui indique la durée à prévoir (environ une minute pour 350 titres, plusieurs
+heures pour une très grande bibliothèque) ; **Arrêter** ou **Ne plus analyser** la désactivent. Une fois activée, elle tourne
+en arrière-plan après chaque indexation, sans connexion ; les fichiers ne sont que lus, et un titre n'est réanalysé que s'il
+change. Le CSV donne le verdict de chaque titre.
 
 ## Téléphone (télécommande)
 

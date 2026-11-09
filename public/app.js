@@ -501,13 +501,29 @@ function viewLossy() {
     const rank = (c) => ({ faux: 0, gonfle: 1 }[info.get(c.dataset.album)?.quality?.verdict] ?? 2);
     $$('.card[data-album]', grid).map((c, i) => [c, i]).sort(([a, i], [b, j]) => rank(a) - rank(b) || i - j).forEach(([c]) => grid.append(c));
     const q = albums.map((x) => x.quality).filter(Boolean), n = (v) => q.filter((x) => x.verdict === v).length;
-    const box = $('#lossy-quality-sum', page);
-    box.innerHTML = analysis.running && analysis.total
-      ? `<b>Analyse de la qualité réelle…</b> ${analysis.done.toLocaleString('fr-FR')} / ${analysis.total.toLocaleString('fr-FR')} titres`
-      : q.length ? `<b>Qualité réelle :</b> ${[[n('faux'), 'faux', 'faux'], [n('gonfle'), 'gonflé', 'gonflés'], [n('ok'), 'conforme', 'conformes']].filter(([k]) => k).map(([k, one, many]) => `${k} ${k > 1 ? many : one}`).join(', ')}.
-        Un MP3 peut afficher 320 kb/s et venir d’une source bien moins bonne : l’app mesure où s’arrêtent les aigus
-        (≈ 16 kHz pour du 128 kb/s, ≈ 19 kHz pour du 192, 20 kHz et plus pour un vrai 320).` : '';
+    const box = $('#lossy-quality-sum', page), hadFocus = box.contains(document.activeElement) || page.dataset.refocus;
+    delete page.dataset.refocus;
+    const why = `Un MP3 peut afficher 320 kb/s et venir d’une source bien moins bonne : l’app mesure où s’arrêtent les aigus
+        (≈ 16 kHz pour du 128 kb/s, ≈ 19 kHz pour du 192, 20 kHz et plus pour un vrai 320).`;
+    const btn = (on, label, cls = 'soft') => `<button class="btn ${cls} lossy-quality-btn" data-quality="${on ? 'on' : 'off'}">${label}</button>`;
+    // ≈ 0,17 s par titre (mesuré) : un ordre de grandeur, pour décider avant de lancer
+    const secs = analysis.mp3 * 0.17, eta = secs < 90 ? 'environ une minute' : secs < 5400 ? `environ ${Math.round(secs / 60)} minutes` : `environ ${Math.round(secs / 3600)} heures`;
+    box.innerHTML = !analysis.enabled
+      ? (analysis.mp3 ? `<b>Qualité réelle :</b> non analysée. ${why}
+        Pour ${analysis.mp3.toLocaleString('fr-FR')} titres MP3, compter ${eta} ; l’analyse tourne en arrière-plan, la musique reste disponible.
+        ${btn(true, 'Analyser la qualité réelle')}` : '')
+      : analysis.running && analysis.total
+        ? `<b>Analyse de la qualité réelle…</b> ${analysis.done.toLocaleString('fr-FR')} / ${analysis.total.toLocaleString('fr-FR')} titres ${btn(false, 'Arrêter')}`
+        : q.length ? `<b>Qualité réelle :</b> ${[[n('faux'), 'faux', 'faux'], [n('gonfle'), 'gonflé', 'gonflés'], [n('ok'), 'conforme', 'conformes']].filter(([k]) => k).map(([k, one, many]) => `${k} ${k > 1 ? many : one}`).join(', ')}.
+        ${why} ${btn(false, 'Ne plus analyser')}` : '';
+    if (hadFocus) $('.lossy-quality-btn', box)?.focus();
   };
+  page.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-quality]'); if (!b) return;
+    page.dataset.refocus = '1'; // le bouton est remplacé : le focus passe au nouveau (navigation aux flèches)
+    fetch('/api/quality', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ enabled: b.dataset.quality === 'on' }) })
+      .then(refresh).catch(() => {});
+  });
   const refresh = () => fetch('/api/lossy').then((r) => r.json()).then(({ albums, analysis }) => {
     if (!document.body.contains(page)) return;
     showQuality(albums, analysis);

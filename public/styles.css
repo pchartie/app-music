@@ -646,6 +646,7 @@ body.liquid .player .p-title, body.liquid .player .p-sub, body.liquid .player .p
 .lossy-page .btn svg { width: 16px; height: 16px; }
 .lossy-seen { color: var(--text-3); font-size: 11.5px; margin-top: 2px; }
 .lossy-quality { font-size: 11.5px; margin-top: 2px; font-weight: 600; }
+.lossy-quality-btn { height: 28px; padding: 0 12px; margin-left: 6px; vertical-align: middle; }
 .q-faux { color: #ff6b6b; }
 .q-gonfle { color: var(--warn); }
 .q-ok { color: var(--text-3); font-weight: 500; }
