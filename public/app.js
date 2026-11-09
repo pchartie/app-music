@@ -46,7 +46,7 @@ async function loadLibrary() {
     .map(([v, l]) => `<div><b>${typeof v === 'number' ? n(v) : v}</b><span>${l}</span></div>`).join('');
   const lossyN = r.albums.filter((a) => a.lossy).length;
   const lossless = !lossyN ? 'FLAC sans perte' : `<a href="#/mp3" class="lossy-link" title="Voir les albums avec perte et télécharger la liste">${WARN}${n(lossyN)} album${lossyN > 1 ? 's' : ''} en ${lossyN && r.albums.filter((a) => a.lossy).every((a) => a.lossyCodec === 'MP3') ? 'MP3' : 'avec perte'}</a>`;
-  const when = r.scanning ? `Indexation ${r.scanProgress.done}/${r.scanProgress.total}` : r.scannedAt ? new Date(r.scannedAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
+  const when = r.scanning ? `Indexation ${Math.floor(scanMeter()(r).pct)} %` : r.scannedAt ? new Date(r.scannedAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
   $('#lib-meta').innerHTML = `<div><span>Taille</span><span>${(r.bytes / 1e9).toLocaleString('fr-FR', { maximumFractionDigits: 1 })} Go</span></div>
     <div><span>Qualité</span><span>${lossless}</span></div><div><span>Dossier</span><button class="folder-btn" data-change-folder title="Changer de dossier">${esc(r.folder || '—')}</button></div><div><span>Mise à jour</span><span>${when}</span></div>
     <div><span>Infos</span><span>${metaState(r.meta)}</span></div>`;
@@ -121,7 +121,7 @@ function attachTilt(root, max = 12) {
     const el = card.querySelector('.tilt'); const r = el.getBoundingClientRect();
     const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
     el.style.transition = 'transform .12s linear, box-shadow .5s';
-    el.style.transform = `rotateX(${(0.5 - py) * max}deg) rotateY(${(px - 0.5) * max}deg) translateZ(10px)`;
+    el.style.transform = `${card.classList.contains('card') ? 'perspective(900px) ' : ''}rotateX(${(0.5 - py) * max}deg) rotateY(${(px - 0.5) * max}deg) translateZ(10px)`;
     el.style.setProperty('--gx', px * 100 + '%'); el.style.setProperty('--gy', py * 100 + '%');
   });
   root.addEventListener('pointerout', (e) => {
@@ -1294,12 +1294,13 @@ function showSetup({ change = false } = {}) {
       $('#setup-choose').classList.add('hidden'); $('#setup-progress').classList.remove('hidden');
       $('.setup-lead').textContent = `${r.audio.toLocaleString('fr-FR')} morceaux trouvés dans ${r.label}.`;
       await new Promise((s) => setTimeout(s, 400));
+      const meter = scanMeter();
       for (;;) {
         const st = await fetch('/api/status').then((x) => x.json()).catch(() => null);
         if (st?.scanning) {
-          const { done: d, total } = st.scanProgress;
-          $('#setup-bar').style.width = `${total ? Math.round((d / total) * 100) : 5}%`;
-          $('#setup-status').textContent = d < total ? `Lecture des fichiers… ${d.toLocaleString('fr-FR')} / ${total.toLocaleString('fr-FR')}` : 'Préparation des pochettes…';
+          const m = meter(st);
+          $('#setup-bar').style.width = `${m.pct.toFixed(1)}%`;
+          $('#setup-status').textContent = m.text;
         } else if (st && !st.needsSetup) {
           $('#setup-bar').style.width = '100%';
           $('#setup-status').textContent = `Prêt : ${st.albums.toLocaleString('fr-FR')} albums.`;
@@ -1335,11 +1336,38 @@ $('#lib-meta').addEventListener('click', async (e) => {
   await loadLibrary(); route();
 });
 
+// ---------- Progression de l'indexation (écran d'accueil et démarrage) ----------
+// Lecture des fichiers (0 → 90 %), puis albums et pochettes (90 → 100 %), avec une estimation du temps restant
+function scanMeter() {
+  let start = null;
+  return (st) => {
+    const { phase, done = 0, total = 0 } = st.scanProgress || {};
+    const pct = !total ? 2 : phase === 'covers' ? 90 + (10 * done) / total : (90 * done) / total;
+    const n = (x) => x.toLocaleString('fr-FR');
+    let text = phase === 'covers' ? `Préparation des albums et des pochettes… ${n(done)} / ${n(total)}` : total ? `Lecture des fichiers… ${n(done)} / ${n(total)}` : 'Recherche des fichiers…';
+    const now = Date.now();
+    if (!start && pct > 0.5) start = { t: now, pct };
+    if (start && now - start.t > 4000 && pct > start.pct + 1) {
+      const left = ((now - start.t) / (pct - start.pct)) * (100 - pct) / 1000;
+      text += left < 60 ? ' · moins d’une minute' : ` · environ ${Math.round(left / 60)} min restante${Math.round(left / 60) > 1 ? 's' : ''}`;
+    }
+    return { pct: Math.min(100, Math.max(2, pct)), text };
+  };
+}
+
 // ---------- Démarrage ----------
 (async () => {
   let r = await loadLibrary();
   if (r.needsSetup) { await showSetup(); r = await loadLibrary(); }
-  while (r.scanning && !r.albums.length) { view.innerHTML = `<div class="empty">Indexation de la musique… ${r.scanProgress.done}/${r.scanProgress.total}</div>`; await new Promise((s) => setTimeout(s, 1000)); r = await loadLibrary(); }
+  // première indexation pas finie (app relancée en cours de route) : même barre que l'écran d'accueil
+  if (r.scanning && !r.albums.length) {
+    const meter = scanMeter();
+    view.innerHTML = `<div class="scan-wait"><h2>Indexation de la musique</h2><div class="setup-bar"><i id="scan-bar"></i></div><p class="setup-status" id="scan-status"></p></div>`;
+    while (r.scanning && !r.albums.length) {
+      const m = meter(r); $('#scan-bar').style.width = `${m.pct.toFixed(1)}%`; $('#scan-status').textContent = m.text;
+      await new Promise((s) => setTimeout(s, 1000)); r = await loadLibrary();
+    }
+  }
   const s = store.get('session');
   if (s?.queue?.every((id) => T.has(id))) { Object.assign(player, { queue: s.queue, order: s.order, pos: s.pos }); player.load(false); }
   route();

@@ -165,11 +165,15 @@ npm test           # toute la batterie de tests (~25 s)
 sans jamais toucher à votre musique. Ils couvrent :
 - le serveur : indexation, regroupements, plages audio, confidentialité des chemins, mode hors ligne ;
 - la recherche ;
+- les grandes bibliothèques : lecture des fichiers en parallèle, barre de progression de la première indexation, défilement sans relief 3D au repos ;
 - l'interface, dans Brave, Chrome ou Chromium sans fenêtre : lecture, file « À suivre », clavier, absence de ressources externes ;
 - la télécommande : réseau simulé, association par QR code (lu par un vrai décodeur), clés, accès refusés,
   puis un ordinateur et un téléphone simulés côte à côte.
 
-Pour imposer un navigateur : `APPMUSIC_BROWSER=/chemin/vers/chrome`. Les captures de cette page se régénèrent avec `npm run screenshots`.
+Pour imposer un navigateur : `APPMUSIC_BROWSER=/chemin/vers/chrome`.
+
+**Grande bibliothèque.** Mesuré sur 19 200 MP3 (1 500 albums) : première indexation en ≈ 20 s sur un SSD (plus long sur un
+disque externe), réindexation sans changement en 0,5 s, défilement de la page Albums à 60 images/s. Les captures de cette page se régénèrent avec `npm run screenshots`.
 L'icône (`public/icon.svg`, aussi utilisée comme favicon) se convertit en icônes de raccourci avec `npm run make-icon`
 (`assets/AppIcon.icns` pour macOS, `.ico` pour Windows, `.png` pour Linux ; installées par `npm run make-app`).
 

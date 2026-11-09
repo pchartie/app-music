@@ -34,7 +34,7 @@ export function findBrowser() {
 // withMusic: false -> premier lancement, aucun dossier choisi.
 // music / cache : dossiers fournis par l'appelant (gardés à l'arrêt) ; sinon tout est temporaire.
 // env : variables d'environnement en plus (télécommande : faux réseau, port du réseau local…)
-export async function startServer({ withMusic = true, music: givenMusic, cache: givenCache, config: givenConfig, env: extraEnv = {} } = {}) {
+export async function startServer({ withMusic = true, music: givenMusic, cache: givenCache, config: givenConfig, env: extraEnv = {}, wait = true } = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'app-music-test-'));
   const music = givenMusic || (withMusic ? makeLibrary(path.join(tmp, 'music')) : null);
   const port = await freePort();
@@ -53,7 +53,8 @@ export async function startServer({ withMusic = true, music: givenMusic, cache: 
     }
     throw new Error('le serveur ne répond pas ou n’indexe pas :\n' + logs);
   };
-  try { await waitIndexed(); } catch (e) { child.kill(); fs.rmSync(tmp, { recursive: true, force: true }); throw e; }
+  // wait : false pour observer l'indexation pendant qu'elle se fait
+  if (wait) try { await waitIndexed(); } catch (e) { child.kill(); fs.rmSync(tmp, { recursive: true, force: true }); throw e; }
   return {
     url, port, tmp, music, cache: env.APPMUSIC_CACHE, configFile: env.APPMUSIC_CONFIG, api, waitIndexed, logs: () => logs,
     // keep : garde le cache et le réglage (pour relancer un serveur dessus)

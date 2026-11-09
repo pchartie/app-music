@@ -326,6 +326,18 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.equal(JSON.parse(await page.evaluate(() => localStorage.getItem('dq.session'))).queue.length, 1);
     await page.click('#b-play'); await page.waitForFunction(() => document.body.classList.contains('paused'));
   });
+
+  test('grande bibliothèque : relief 3D seulement sur la pochette survolée (défilement fluide)', async () => {
+    await go('#/albums', '.card[data-album] .tilt');
+    await page.mouse.move(2, 2);
+    const flat = await page.$$eval('.card[data-album] .tilt', (els) => els.map((e) => getComputedStyle(e).transformStyle));
+    assert.ok(flat.every((x) => x === 'flat'), 'aucune scène 3D au repos');
+    const r = await (await page.$('.card[data-album] .tilt')).boundingBox();
+    await page.mouse.move(r.x + r.width * 0.3, r.y + r.height * 0.3, { steps: 4 }); await sleep(200);
+    assert.equal(await page.$eval('.card[data-album] .tilt', (e) => getComputedStyle(e).transformStyle), 'preserve-3d');
+    assert.match(await page.$eval('.card[data-album] .tilt', (e) => e.style.transform), /^perspective\(900px\) rotateX/);
+    await page.mouse.move(2, 2);
+  });
 });
 
 const location = (url) => new URL(url).hash;

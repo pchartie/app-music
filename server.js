@@ -17,6 +17,7 @@ const ROOT = path.dirname(fileURLToPath(import.meta.url));
 const PORT = Number(process.env.PORT || 4321);
 const CACHE = process.env.APPMUSIC_CACHE || path.join(ROOT, 'cache');
 const COVERS = path.join(CACHE, 'covers');
+const SCAN_DELAY = Number(process.env.APPMUSIC_SCAN_DELAY || 0); // tests : ralentit la lecture de chaque fichier (ms) pour voir la progression
 const READER = 2; // version de la lecture des fichiers (2 : disque lu dans le nom « 101-… »)
 const META = path.join(CACHE, 'meta');
 const ARTIST_IMG = path.join(CACHE, 'artists');
@@ -60,7 +61,7 @@ const norm = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,
 
 let library = { albums: [], artists: [], tracks: [], scannedAt: null };
 let scanning = false;
-let scanProgress = { done: 0, total: 0 };
+let scanProgress = { phase: null, done: 0, total: 0 }; // phase : 'files' (lecture des fichiers) puis 'covers' (albums et pochettes)
 
 // ---------- Indexation ----------
 async function walk(dir, out = []) {
@@ -98,16 +99,18 @@ async function scan() {
   const previous = new Map(library.tracks.map((t) => [t.path, t]));
   // READER : version de la lecture des fichiers ; à augmenter quand elle change, pour relire toute la bibliothèque une fois
   const files = await walk(MUSIC_DIR);
-  scanProgress = { done: 0, total: files.length };
+  scanProgress = { phase: 'files', done: 0, total: files.length };
   const tracks = [];
   const pictures = new Map(); // albumId -> embedded picture
 
-  for (const file of files) {
-    scanProgress.done++;
+  // lecture de plusieurs fichiers à la fois (première indexation d'une grande bibliothèque bien plus rapide),
+  // résultats rangés dans l'ordre des fichiers : même bibliothèque, mêmes pochettes qu'une lecture un par un
+  const read = async (file) => {
+    if (SCAN_DELAY) await new Promise((r) => setTimeout(r, SCAN_DELAY));
     let st;
-    try { st = await fsp.stat(file); } catch { continue; }
+    try { st = await fsp.stat(file); } catch { return null; }
     const prev = previous.get(file);
-    if (prev && prev.mtime === st.mtimeMs && prev.reader === READER && fs.existsSync(path.join(COVERS, prev.albumId + '.jpg'))) { tracks.push(prev); continue; }
+    if (prev && prev.mtime === st.mtimeMs && prev.reader === READER && fs.existsSync(path.join(COVERS, prev.albumId + '.jpg'))) return { track: prev };
     try {
       const m = await parseFile(file, { duration: true });
       const c = m.common;
@@ -148,12 +151,22 @@ async function scan() {
         bitrate: m.format.bitrate || null,
         lossless: !!m.format.lossless,
       };
-      tracks.push(t);
       const pic = c.picture?.find((p) => /front/i.test(p.type || '')) || c.picture?.[0];
-      if (pic && !pictures.has(t.albumDir + '|' + norm(album))) pictures.set(t.albumDir + '|' + norm(album), pic);
+      return { track: t, pic, key: t.albumDir + '|' + norm(album) };
     } catch (e) {
       console.warn('Lecture impossible :', file, e.message);
+      return null;
     }
+  };
+  const results = new Array(files.length);
+  let nextFile = 0;
+  await Promise.all(Array.from({ length: 8 }, async () => {
+    while (nextFile < files.length) { const i = nextFile++; results[i] = await read(files[i]); scanProgress.done++; }
+  }));
+  for (const r of results) {
+    if (!r) continue;
+    tracks.push(r.track);
+    if (r.pic && !pictures.has(r.key)) pictures.set(r.key, r.pic);
   }
 
   assignAlbums(tracks, pictures);
@@ -173,7 +186,10 @@ async function scan() {
     a.genre = a.genre || t.genre;
   }
   const byId = new Map(tracks.map((t) => [t.id, t]));
-  for (const a of albums.values()) {
+  scanProgress = { phase: 'covers', done: 0, total: albums.size };
+  // albums préparés quatre à la fois (pochettes : extraction et redimensionnement)
+  const queue = [...albums.values()];
+  const prepare = async (a) => {
     a.tracks.sort((x, y) => { const X = byId.get(x), Y = byId.get(y); return X.disc - Y.disc || X.trackNo - Y.trackNo || X.path.localeCompare(Y.path); });
     const first = byId.get(a.tracks[0]);
     a.format = first.lossless && first.bits ? `${first.codec} ${first.bits} bits · ${(first.rate / 1000).toLocaleString('fr-FR')} kHz` : `${codecName(first)}${first.bitrate ? ' · ' + Math.round(first.bitrate / 1000) + ' kb/s' : ''}`;
@@ -186,7 +202,8 @@ async function scan() {
     // date de création du dossier sur ce disque (sert seulement à dater les albums déjà là au premier passage)
     a.born = Math.min(...[...a.dirs].map((d) => { try { const st = fs.statSync(d); return st.birthtimeMs > 0 ? st.birthtimeMs : st.mtimeMs; } catch { return Date.now(); } }));
     a.dirs = undefined;
-  }
+  };
+  await Promise.all(Array.from({ length: 4 }, async () => { while (queue.length) { await prepare(queue.shift()); scanProgress.done++; } }));
 
   // Artistes
   const artists = new Map();
