@@ -399,6 +399,12 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     await page.click('#b-queue'); await page.waitForSelector('#queue.open.just-opened');
     assert.equal(await page.$eval('#queue-list .q-item', (e) => getComputedStyle(e).animationName), 'q-in');
     await page.click('#q-close');
+    // page cachée (onglet en arrière-plan…) : les animations se mettent en pause, et reprennent au retour
+    const hide = (hidden) => page.evaluate((h) => { Object.defineProperty(document, 'hidden', { value: h, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); }, hidden);
+    const logo = () => page.$eval('.brand-mark', (e) => getComputedStyle(e).animationPlayState);
+    assert.equal(await logo(), 'running');
+    await hide(true); assert.equal(await logo(), 'paused');
+    await hide(false); assert.equal(await logo(), 'running');
     // animations réduites demandées par le système : plus de cascade ni de battement
     await page.emulateMedia({ reducedMotion: 'reduce' });
     assert.equal(await page.$eval('.brand-mark', (e) => getComputedStyle(e).animationName), 'none');
@@ -420,6 +426,9 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.ok(forward ? after.v > before.v : after.v < before.v, 'le curseur suit');
     assert.equal(await page.$eval('.flow-caption', (e) => e.classList.contains('swap')), true, 'la légende rejoue son entrée');
     assert.match(await page.$eval('.flow', (e) => getComputedStyle(e).getPropertyValue('--fc')), /rgb/, 'lueur aux couleurs de l’album');
+    // le reflet du boîtier central ne passe pas à l'arrivée d'un album : il attend la fin de son cycle de 9 s
+    const sheen = await page.evaluate(() => { const a = document.querySelector('.cf-item.center .gloss').getAnimations({ subtree: true }).find((x) => x.animationName === 'cf-sheen'); const k = a.effect.getKeyframes(); return { start: k.filter((f) => f.transform === k[0].transform).at(-1).offset, dur: a.effect.getTiming().duration, delay: a.effect.getTiming().delay }; });
+    assert.ok(sheen.start > 0.8 && sheen.dur === 9000 && sheen.delay === 0, JSON.stringify(sheen));
   });
 });
 

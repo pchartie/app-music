@@ -51,6 +51,9 @@ function countTo(el, to, fmt) {
   };
   requestAnimationFrame(step);
 }
+// personne ne regarde (page cachée) : les animations décoratives s'arrêtent, et reprennent au retour
+const watchAway = () => document.body.classList.toggle('away', document.hidden);
+document.addEventListener('visibilitychange', watchAway); watchAway();
 // pastille de la page active dans la colonne : glisse d'une ligne à l'autre
 function movePill() {
   const box = $('.sidebar nav'); let pill = $('.nav-pill', box);

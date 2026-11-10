@@ -250,8 +250,9 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .flow-stage:not(.dragging) .cf-item:not(.center):hover .cf-box { translate: 0 -12px; }
 .flow.opening .cf-item .cf-box { animation-play-state: paused; }
 .gloss::after { content: ""; position: absolute; inset: -30% -60%; background: linear-gradient(105deg, transparent 42%, rgba(255, 255, 255, .3) 50%, transparent 58%); transform: translateX(-70%); pointer-events: none; }
-.cf-item.center .gloss::after { animation: cf-sheen 9s ease-in-out .25s infinite; }
-@keyframes cf-sheen { 0% { transform: translateX(-70%); } 13%, 100% { transform: translateX(70%); } }
+/* le reflet passe en fin de cycle : rien à l'arrivée d'un album, puis toutes les 9 s tant qu'il reste au centre */
+.cf-item.center .gloss::after { animation: cf-sheen 9s ease-in-out infinite; }
+@keyframes cf-sheen { 0%, 87% { transform: translateX(-70%); } 100% { transform: translateX(70%); } }
 .cf-shadow { transition: opacity .6s, transform .6s; }
 .cf-item.center .cf-shadow { animation: cf-shadow 6.5s ease-in-out infinite; }
 @keyframes cf-shadow { 50% { opacity: .7; } }
@@ -593,6 +594,8 @@ tr[data-track][draggable] { -webkit-user-drag: element; }
   .np-cover { width: 70vw; height: 70vw; }
 }
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition-duration: .01s !important; } }
+/* page non visible (onglet en arrière-plan, fenêtre réduite ou entièrement recouverte) : les animations se mettent en pause */
+body.away, body.away *, body.away *::before, body.away *::after { animation-play-state: paused !important; }
 
 /* ---------- Focus clavier / télécommande (style tvOS) ---------- */
 :focus { outline: none; }
