@@ -298,6 +298,7 @@ function viewFlow(startId) {
   if (cur < 0) cur = Math.floor(Math.random() * albums.length);
   view.innerHTML = `
     <div class="flow">
+      <div class="flow-glow" aria-hidden="true"></div>
       <div class="flow-stage" id="stage" tabindex="0" aria-label="Cover Flow : flèches gauche et droite pour parcourir, OK pour ouvrir"></div>
       <div class="flow-caption"><div class="t"></div><div class="a"></div>
         <div class="flow-actions"><button class="btn glass primary" data-act="play">${ICON.play} Lecture</button><button class="btn glass" data-act="open">Ouvrir l'album</button></div>
@@ -320,13 +321,16 @@ function viewFlow(startId) {
     stage.appendChild(el);
     return el;
   });
-  let S = 300, W = 324, pos = cur, target = cur, raf = null;
+  const flowEl = $('.flow');
+  let S = 300, W = 324, pos = cur, target = cur, raf = null, vel = 0, last = 0, center = -1;
   const colored = new Set();
+  // entrée en scène : les boîtiers glissent jusqu'à l'album retenu (ressort ci-dessous)
+  if (!calm() && albums.length > 3) pos = cur + (cur >= 3 ? -2.6 : 2.6);
 
   const resize = () => {
     S = Math.round(Math.min(stage.clientHeight * 0.56, stage.clientWidth * 0.27, 360));
     W = Math.round(S * 1.08);
-    stage.style.setProperty('--S', S + 'px'); stage.style.setProperty('--W', W + 'px'); stage.style.setProperty('--D', Math.max(12, Math.round(S * 0.075)) + 'px');
+    flowEl.style.setProperty('--S', S + 'px'); flowEl.style.setProperty('--W', W + 'px'); flowEl.style.setProperty('--D', Math.max(12, Math.round(S * 0.075)) + 'px');
     render();
   };
   function render() {
@@ -337,21 +341,31 @@ function viewFlow(startId) {
       if (!colored.has(i)) { colored.add(i); dominant(albums[i].id).then((c) => el.style.setProperty('--sc', c.map((v) => Math.round(v * 0.75)).join(','))); }
       const s = Math.sign(d), c = Math.min(a, 1);
       const x = s * (c * W * 0.62 + Math.max(0, a - 1) * W * 0.22);
-      el.style.transform = `translate3d(${x}px,0,${-c * S * 0.55}px) rotateY(${-s * c * 64}deg)`;
+      // le boîtier du centre avance un peu vers le spectateur ; les voisins s'inclinent
+      el.style.transform = `translate3d(${x}px,0,${-c * S * 0.55 + (1 - c) * S * 0.1}px) rotateY(${-s * c * 64}deg)`;
       el.style.zIndex = 1000 - Math.round(a * 10);
       el._shade.style.opacity = Math.min(0.6, a * 0.13);
     }
   }
-  function animate() {
-    const diff = target - pos;
-    pos += diff * 0.15;
-    if (Math.abs(diff) < 0.0008) pos = target;
+  // Ressort (indépendant de la fréquence de l'écran) : ferme pendant un glisser, plus souple ensuite,
+  // avec un très léger dépassement qui donne du poids aux boîtiers.
+  function animate(now) {
+    const dt = Math.min(0.05, (now - (last || now)) / 1000) || 1 / 60; last = now;
+    const k = drag ? 420 : 150, c = drag ? 41 : 19;
+    for (let n = Math.max(1, Math.round(dt / 0.004)), h = dt / n; n > 0; n--) { vel += (k * (target - pos) - c * vel) * h; pos += vel * h; }
+    if (Math.abs(target - pos) < 0.0006 && Math.abs(vel) < 0.004) { pos = target; vel = 0; }
     render();
-    const i = Math.round(pos);
-    if (i !== cur) { cur = i; updateCaption(); }
-    raf = pos !== target ? requestAnimationFrame(animate) : null;
+    const i = Math.max(0, Math.min(albums.length - 1, Math.round(pos)));
+    if (i !== cur) { const dir = Math.sign(i - cur); cur = i; updateCaption(dir); }
+    setCenter(pos === target ? cur : -1);
+    if (pos !== target) raf = requestAnimationFrame(animate); else { raf = null; last = 0; }
   }
-  const kick = () => { if (!raf) raf = requestAnimationFrame(animate); };
+  // boîtier au repos au centre : il flotte et un reflet le parcourt (styles .cf-item.center)
+  function setCenter(i) {
+    if (i === center) return;
+    items[center]?.classList.remove('center'); center = i; items[center]?.classList.add('center');
+  }
+  const kick = () => { if (!raf) { last = 0; raf = requestAnimationFrame(animate); } };
   const go = (t) => { target = Math.max(0, Math.min(albums.length - 1, t)); kick(); };
   let opening = false;
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -384,10 +398,17 @@ function viewFlow(startId) {
     });
     vt.finished.finally(() => { arriving = null; $$('[style*="view-transition-name"]').forEach((n) => (n.style.viewTransitionName = '')); });
   }
-  let capTimer;
-  function updateCaption() {
+  let capTimer, capAt = 0;
+  function updateCaption(dir = 0) {
     const a = albums[cur];
     scrub.value = cur; store.set('flowAlbum', a.id);
+    scrub.style.setProperty('--v', albums.length > 1 ? cur / (albums.length - 1) : 0);
+    // le titre glisse dans le sens du défilement (pas pendant un défilement rapide : il resterait illisible)
+    const now = performance.now();
+    if (dir && now - capAt > 140) { cap.style.setProperty('--dir', dir); replay(cap); }
+    capAt = now;
+    // lueur au sol : franche pour une pochette colorée, presque éteinte pour une pochette grise ou blanche (sinon voile laiteux)
+    dominant(a.id).then((c) => { if (albums[cur] !== a) return; const mx = Math.max(...c), sat = mx ? (mx - Math.min(...c)) / mx : 0; flowEl.style.setProperty('--fc', `rgb(${vivid(c).join(' ')} / ${Math.min(1, sat * 1.8).toFixed(2)})`); });
     $('.t', cap).textContent = a.title;
     $('.a', cap).innerHTML = `<a href="#/artist/${a.artistId}">${esc(a.artist)}</a>${a.year ? ' · ' + a.year : ''}${lossyMark(a)}`;
     clearTimeout(capTimer);
@@ -424,7 +445,7 @@ function viewFlow(startId) {
     go(target + d / 110);
     clearTimeout(wheelSnap); wheelSnap = setTimeout(() => go(Math.round(target)), 140);
   }, { passive: false });
-  scrub.addEventListener('input', () => go(+scrub.value));
+  scrub.addEventListener('input', () => { scrub.style.setProperty('--v', albums.length > 1 ? scrub.value / (albums.length - 1) : 0); go(+scrub.value); });
   cap.addEventListener('click', (e) => {
     const act = e.target.closest('[data-act]')?.dataset.act; const a = albums[cur];
     if (act === 'play') player.playList(a.tracks, 0);
@@ -444,6 +465,7 @@ function viewFlow(startId) {
   window.addEventListener('keydown', onKey, true);
   const ro = new ResizeObserver(resize); ro.observe(stage);
   resize(); updateCaption();
+  if (pos !== target) kick(); else setCenter(cur);
   cleanup = () => { window.removeEventListener('keydown', onKey, true); ro.disconnect(); cancelAnimationFrame(raf); };
 }
 

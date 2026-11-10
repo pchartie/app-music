@@ -404,6 +404,23 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     assert.equal(await page.$eval('.brand-mark', (e) => getComputedStyle(e).animationName), 'none');
     await page.emulateMedia({ reducedMotion: 'no-preference' });
   });
+
+  test('Cover Flow : le boîtier du centre flotte, la légende suit, le curseur de parcours avance', async () => {
+    await go('#/flow', '.cf-item');
+    await page.waitForSelector('.cf-item.center'); // fin de l'entrée en scène
+    assert.equal(await page.$$eval('.cf-item.center', (e) => e.length), 1);
+    assert.equal(await page.$eval('.cf-item.center .cf-box', (e) => getComputedStyle(e).animationName), 'cf-float');
+    const state = () => page.evaluate(() => ({ i: +document.querySelector('.cf-item.center')?.dataset.i, title: document.querySelector('.flow-caption .t').textContent, v: +document.querySelector('.flow-scrub input').style.getPropertyValue('--v') }));
+    const before = await state();
+    const forward = before.i < lib.albums.length - 1;
+    await page.focus('#stage'); await page.keyboard.press(forward ? 'ArrowRight' : 'ArrowLeft');
+    await page.waitForFunction((i) => +document.querySelector('.cf-item.center')?.dataset.i === i, before.i + (forward ? 1 : -1));
+    const after = await state();
+    assert.notEqual(after.title, before.title);
+    assert.ok(forward ? after.v > before.v : after.v < before.v, 'le curseur suit');
+    assert.equal(await page.$eval('.flow-caption', (e) => e.classList.contains('swap')), true, 'la légende rejoue son entrée');
+    assert.match(await page.$eval('.flow', (e) => getComputedStyle(e).getPropertyValue('--fc')), /rgb/, 'lueur aux couleurs de l’album');
+  });
 });
 
 const location = (url) => new URL(url).hash;

@@ -136,7 +136,7 @@ try {
   await page.mouse.click(seek.x + seek.width * 0.36, seek.y + seek.height / 2);
   await sleep(600);
 
-  await go('#/flow', 2000); await shot('cover-flow');
+  await go(`#/flow/${album('Orbite basse').id}`, 2600); await shot('cover-flow');
   await go(`#/album/${album('Néons sur la Seine').id}`, 1200); await page.$eval('.shelf', (e) => e.scrollIntoView()); await sleep(900); await page.evaluate(() => document.querySelector('#view').scrollTo(0, 0)); await sleep(1200); await page.mouse.move(1300, 850); await shot('album');
   await go('#/albums', 1600); await page.click('#b-queue'); await sleep(900); await page.mouse.move(700, 850); await shot('albums-queue');
   await page.click('#q-close'); await sleep(500);
