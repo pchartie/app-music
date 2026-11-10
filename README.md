@@ -153,6 +153,9 @@ entrantes (acceptez ; sous Windows, pour les réseaux **privés**) ; un VPN peut
 
 Sur le curseur de position ou de volume, ← et → avancent de 10 s ou règlent le volume.
 
+Pour lire de loin (télé, canapé), le bouton **Aa** de « Ma bibliothèque » agrandit toute l'interface : Normal, Grand (+25 %)
+ou Très grand (+50 %), avec des petits textes plus clairs. Le choix est gardé sur l'appareil.
+
 ## Développement
 
 ```sh

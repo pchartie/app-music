@@ -150,6 +150,13 @@ test('« À suivre » : ajout depuis le téléphone, saut et retrait', { skip: !
   await waitMac(() => Math.abs(+getComputedStyle(document.querySelector('#volume')).getPropertyValue('--v') - 0.3) < 0.02);
   await phone.goto(`http://127.0.0.1:${lanPort}/m/#album/${other.id}`);
   await phone.waitForSelector('.tracks .tr');
+  // même langage d'animation que sur l'ordinateur : arrivée en cascade, lecture ⇄ pause en fondu, pause quand la page est cachée
+  assert.equal(await phone.$eval('#view', (v) => v.classList.contains('enter')), true);
+  assert.deepEqual(await phone.$$eval('.tracks .tr', (els) => els.slice(0, 2).map((e) => [e.classList.contains('st'), e.style.getPropertyValue('--k')])), [[true, '0'], [true, '1']]);
+  assert.equal(await phone.$eval('#mini [data-cmd="toggle"]', (b) => ['.i-play', '.i-pause'].map((x) => getComputedStyle(b.querySelector(x)).display).join(' ')), 'block block', 'les deux pictogrammes restent en place');
+  await phone.evaluate(() => { Object.defineProperty(document, 'hidden', { value: true, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
+  assert.equal(await phone.$eval('.conn', (e) => getComputedStyle(e).animationPlayState), 'paused');
+  await phone.evaluate(() => { Object.defineProperty(document, 'hidden', { value: false, configurable: true }); document.dispatchEvent(new Event('visibilitychange')); });
   await phone.tap(`.tr[data-track="${other.tracks[2]}"] [data-add]`);
   await waitMac((t) => [...document.querySelectorAll('#queue-list .q-item b')].some((b) => b.textContent === t), finalTitle);
   // la file du téléphone suit (bouton « À suivre » du mini-lecteur), puis on saute directement à ce titre

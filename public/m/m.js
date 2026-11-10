@@ -23,6 +23,19 @@ let index = null, mixCache = null;
 let computer = 'l’ordinateur';
 const mixes = () => (mixCache ||= buildMixes(LIB));
 
+// Mouvement : rejouer une animation CSS (changement de titre, arrivée d'une page), cascade des premières cartes
+function replay(el, cls = 'swap') { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+function stagger(root) {
+  let k = 0;
+  for (const box of root.querySelectorAll('.grid, .list')) {
+    const kids = [...box.children].slice(0, 14);
+    kids.forEach((el, i) => { el.classList.add('st'); el.style.setProperty('--k', Math.min(k + i, 18)); });
+    k += Math.min(kids.length, 6);
+  }
+}
+const watchAway = () => document.body.classList.toggle('away', document.hidden);
+document.addEventListener('visibilitychange', watchAway); watchAway();
+
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast.t); toast.t = setTimeout(() => t.classList.remove('show'), 2200); }
 
 // ---------- Association ----------
@@ -134,6 +147,11 @@ function renderPlayer() {
   document.body.classList.toggle('has-track', !!t);
   document.body.classList.toggle('playing', !!S?.playing);
   if (!t) { if ($('#np').classList.contains('open')) closeNP(); showBanner(); return; }
+  if (renderPlayer.last && renderPlayer.last !== t.id) { // titre suivant : le texte glisse, la pochette change en fondu
+    replay($('.mini-meta')); replay($('#np-title')); replay($('#np-artist'));
+    if ($('#mini-cover').dataset.id !== t.albumId) { replay($('#mini-cover')); replay($('#np-cover')); }
+  }
+  renderPlayer.last = t.id;
   if ($('#mini-cover').dataset.id !== t.albumId) { $('#mini-cover').src = $('#np-cover').src = cover(t.albumId); $('#mini-cover').dataset.id = t.albumId; }
   $('#mini-title').textContent = $('#np-title').textContent = t.title;
   $('#mini-sub').textContent = t.artist;
@@ -355,7 +373,10 @@ function route() {
   if (!isPage) store.set('tab', name);
   currentIds = [];
   const title = { albums: viewAlbums, artists: viewArtists, selections: viewSelections, search: viewSearch, album: viewAlbum, artist: viewArtist, mix: viewMix }[name](arg && decodeURIComponent(arg));
-  $('#title').textContent = title || TABS[name] || 'App Music';
+  const heading = title || TABS[name] || 'App Music';
+  if ($('#title').textContent !== heading) replay($('#title'));
+  $('#title').textContent = heading;
+  if (name !== 'search' || shown !== 'search') { replay($('#view'), 'enter'); stagger($('#view')); }
   $('#back').hidden = !isPage;
   $$('#tabs a').forEach((a) => a.classList.toggle('active', a.dataset.tab === (isPage ? store.get('tab', 'albums') : name)));
   shown = name;

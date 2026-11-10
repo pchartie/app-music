@@ -51,6 +51,42 @@ function countTo(el, to, fmt) {
   };
   requestAnimationFrame(step);
 }
+// texte du lecteur : s'il ne tient pas dans sa place, il défile lentement au lieu d'être coupé
+function fitText(el) {
+  const span = el.firstElementChild; if (!span?.classList.contains('mq')) return;
+  el.classList.remove('scrolls');
+  const over = span.offsetWidth - el.clientWidth;
+  if (over > 6) { el.style.setProperty('--over', over + 20 + 'px'); el.style.setProperty('--dur', Math.max(8, (over + 20) / 14 + 5).toFixed(1) + 's'); el.classList.add('scrolls'); }
+}
+function setText(el, text) {
+  if (el.firstElementChild?.classList.contains('mq') && el.textContent === text) return fitText(el);
+  el.innerHTML = '<span class="mq"></span>'; el.firstChild.textContent = text; fitText(el);
+}
+const refit = () => ['#p-title', '#p-sub', '#p-next-title'].forEach((sel) => fitText($(sel)));
+// image de pochette introuvable (album sans pochette) : pochette neutre, partout dans l'app
+document.addEventListener('error', (e) => {
+  const img = e.target;
+  if (img.tagName !== 'IMG' || img.dataset.blank || !/\/cover\//.test(img.getAttribute('src') || '')) return;
+  img.dataset.blank = '1'; img.src = 'blank.svg';
+}, true);
+// taille de l'interface (bouton « Aa ») : Normal, Grand, Très grand ; gardée sur cet appareil
+const SIZES = [['', 'Normal'], ['l', 'Grand'], ['xl', 'Très grand']];
+function applySize(k) {
+  const size = SIZES.find(([x]) => x === k) || SIZES[0];
+  if (size[0]) document.documentElement.dataset.size = size[0]; else delete document.documentElement.dataset.size;
+  const b = $('#size-btn'); if (b) b.title = `Taille de l’interface : ${size[1]} (cliquer pour changer)`;
+  return size;
+}
+
+applySize(store.get('size', ''));
+$('#size-btn').onclick = () => {
+  const i = SIZES.findIndex(([x]) => x === (document.documentElement.dataset.size || ''));
+  const [k, label] = applySize(SIZES[(i + 1) % SIZES.length][0]);
+  store.set('size', k); toast(`Taille de l’interface : ${label}`);
+  requestAnimationFrame(() => { movePill(); refit(); });
+};
+window.addEventListener('resize', () => { clearTimeout(refit.t); refit.t = setTimeout(refit, 150); });
+
 // personne ne regarde (page cachée) : les animations décoratives s'arrêtent, et reprennent au retour
 const watchAway = () => document.body.classList.toggle('away', document.hidden);
 document.addEventListener('visibilitychange', watchAway); watchAway();
@@ -314,7 +350,7 @@ function viewFlow(startId) {
     el.className = 'cf-item'; el.dataset.i = i;
     el.innerHTML = `<div class="cf-box">
         <div class="cf-shadow"></div>
-        <div class="lid"><div class="f front"><div class="hinge"></div><img draggable="false" src="${cover(a.id)}" loading="lazy" alt=""><div class="gloss"></div><div class="cf-shade"></div></div><div class="f lid-in"></div></div>
+        <div class="lid"><div class="f front"><div class="hinge"></div><img draggable="false" src="${cover(a.id)}" loading="lazy" alt="">${a.hasCover === false ? `<div class="cf-title"><small>${esc(a.artist)}</small><b>${esc(a.title)}</b></div>` : ''}<div class="gloss"></div><div class="cf-shade"></div></div><div class="f lid-in"></div></div>
         <div class="f back"></div>
         <div class="f left"><span>${esc(a.artist)} · ${esc(a.title)}</span></div>
         <div class="f right"></div><div class="f top"></div><div class="f bottom"></div>
@@ -1069,8 +1105,8 @@ function updateNowPlaying(t) {
   $('#p-cover').src = cover(t.albumId);
   document.body.classList.add('has-track');
   coverGradient(t.albumId).then(([c1, c2]) => { if (player.current !== t.id) return; const pl = $('#player'); pl.style.setProperty('--pc1', c1.join(' ')); pl.style.setProperty('--pc2', c2.join(' ')); });
-  $('#p-title').textContent = t.title;
-  $('#p-sub').textContent = `${t.artist} — ${t.album}`;
+  setText($('#p-title'), t.title);
+  setText($('#p-sub'), `${t.artist} — ${t.album}`);
   const fmt = t.lossless && t.bits ? `Lossless · ${t.bits} bits/${(t.rate / 1000).toLocaleString('fr-FR')} kHz` : t.codec;
   $('#p-format').textContent = t.lossless ? 'Lossless' : '';
   $('#p-format').title = fmt;
@@ -1107,7 +1143,7 @@ function renderNext() {
   const label = t ? t.title : player.queue.length ? 'Fin de la file' : 'Rien en attente';
   if ($('#p-next-title').textContent !== label && renderNext.seen) { replay($('.p-next-meta')); if (t) replay($('#p-next-cover')); }
   renderNext.seen = true;
-  $('#p-next-title').textContent = label;
+  setText($('#p-next-title'), label);
   $('#p-next-title').title = t ? `${t.title} — ${t.artist}` : '';
   const img = $('#p-next-cover'); if (t) img.src = cover(t.albumId); else img.removeAttribute('src');
 }

@@ -19,8 +19,16 @@
   --sidebar-w: 260px;
   --player-h: 76px;
   --tint: 120, 120, 130;
+  --zoom: 1;
   color-scheme: dark;
 }
+/* Taille de l'interface (bouton « Aa ») : tout grossit d'un bloc et les petits textes gris s'éclaircissent,
+   pour lire de loin. Les unités liées à la fenêtre (vh, vw) sont divisées par --zoom : elles ne suivent pas le zoom. */
+html[data-size="l"] { --zoom: 1.25; zoom: 1.25; --text-2: #b4b4ba; --text-3: #8c8c92; }
+html[data-size="xl"] { --zoom: 1.5; zoom: 1.5; --text-2: #bdbdc3; --text-3: #98989e; }
+/* fenêtre trop étroite pour un tel agrandissement : on le modère, puis on y renonce */
+@media (max-width: 1300px) { html[data-size="xl"] { --zoom: 1.25; zoom: 1.25; } }
+@media (max-width: 1050px) { html[data-size] { --zoom: 1; zoom: 1; } }
 
 @supports (transition-timing-function: linear(0, 1)) {
   :root { --spring: linear(0, .009, .035 2.1%, .141 4.4%, .723 12.9%, .938 16.7%, 1.017, 1.077, 1.121, 1.149 24.3%, 1.159, 1.163, 1.161, 1.154 29.9%, 1.129 32.8%, 1.051 39.6%, 1.017 43.1%, .991, .977 51%, .974 53.8%, .975 57.1%, .997 69.8%, 1.003 76.9%, 1.004 83.8%, 1); }
@@ -44,7 +52,7 @@ img { display: block; }
 ::-webkit-scrollbar-thumb:hover { background: rgba(200, 200, 210, .45); border: 2px solid transparent; background-clip: content-box; }
 ::-webkit-scrollbar-corner { background: transparent; }
 
-.app { position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) 1fr; height: 100vh; }
+.app { position: relative; z-index: 1; display: grid; grid-template-columns: var(--sidebar-w) 1fr; height: calc(100vh / var(--zoom)); }
 
 /* ---------- Sidebar ---------- */
 .sidebar {
@@ -53,7 +61,10 @@ img { display: block; }
   padding: 22px 12px 12px;
   display: flex; flex-direction: column; gap: 18px;
   z-index: 5;
+  overflow-y: auto; overflow-x: hidden; scrollbar-width: none; /* fenêtre basse ou interface agrandie : la colonne défile */
 }
+.sidebar::-webkit-scrollbar { display: none; }
+.sidebar > * { flex: none; }
 .brand { display: flex; align-items: center; gap: 13px; padding: 0 8px; font: 650 22px/1 -apple-system, "SF Pro Display", sans-serif; letter-spacing: -.01em; }
 .brand-mark { width: 48px; height: 48px; flex: none; filter: drop-shadow(0 4px 14px rgba(250, 45, 72, .55)); animation: brand-pulse 2.4s ease-in-out infinite; }
 /* battement doux du logo : il grossit un peu et son halo rouge s'étend */
@@ -94,11 +105,11 @@ nav a.active .nav-ic { animation: ic-pop .6s var(--spring); }
 .sidebar-foot { margin-top: auto; }
 .lib-card { background: linear-gradient(180deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .025)); border: 1px solid rgba(255, 255, 255, .07); border-radius: 16px; padding: 14px; box-shadow: inset 0 1px 0 rgba(255, 255, 255, .05); transition: border-color .4s, background .4s; }
 .lib-card:hover { border-color: rgba(255, 255, 255, .12); }
-.lib-head button:active { transform: scale(.88); }
-.lib-head button { transition: background .2s, color .2s, transform .3s var(--spring); }
 .lib-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
 .lib-head span { font-size: 13px; font-weight: 600; color: #fff; }
-.lib-head button { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2); transition: background .2s, color .2s; }
+.lib-head button { width: 28px; height: 28px; border-radius: 8px; display: grid; place-items: center; color: var(--text-2); transition: background .2s, color .2s, transform .3s var(--spring); }
+.lib-head button:active { transform: scale(.88); }
+#size-btn { font: 650 12.5px/1 -apple-system, "SF Pro Text", sans-serif; letter-spacing: -.02em; }
 .lib-head button:hover { background: rgba(255, 255, 255, .08); color: #fff; }
 .lib-head button svg { width: 16px; height: 16px; }
 .lib-head button.spin svg { animation: spin 1s linear infinite; }
@@ -196,6 +207,10 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .f.front, .f.back, .f.refl { left: 0; top: 0; width: var(--W); height: var(--S); }
 .f.front { transform: translateZ(calc(var(--D) / 2)); display: flex; background: #0d0d0e; border-radius: 2px; overflow: hidden; }
 .f.front img { height: 100%; aspect-ratio: 1; object-fit: cover; flex: none; }
+/* album sans pochette : boîtier neutre (blank.svg) avec le nom de l'album, comme un livret imprimé */
+.cf-title { position: absolute; left: calc(var(--W) - var(--S) + var(--S) * .09); right: calc(var(--S) * .09); bottom: calc(var(--S) * .09); display: flex; flex-direction: column; gap: calc(var(--S) * .012); color: #fff; pointer-events: none; }
+.cf-title small { font-size: calc(var(--S) * .034); font-weight: 600; letter-spacing: .16em; text-transform: uppercase; color: rgba(255, 255, 255, .6); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cf-title b { font: 650 calc(var(--S) * .068) / 1.12 -apple-system, "SF Pro Display", sans-serif; letter-spacing: -.02em; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .hinge { flex: 1; background:
   linear-gradient(90deg, rgba(255, 255, 255, .14), rgba(255, 255, 255, .02) 30%, rgba(0, 0, 0, .3) 80%, rgba(255, 255, 255, .08)),
   repeating-linear-gradient(180deg, rgba(255, 255, 255, .07) 0 1px, transparent 1px 4px),
@@ -391,7 +406,7 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
   position: fixed; left: calc(var(--sidebar-w) + 16px); right: 16px; bottom: 12px; height: var(--player-h);
   background: rgba(20, 20, 22, .42); backdrop-filter: blur(22px) saturate(170%); -webkit-backdrop-filter: blur(22px) saturate(170%);
   border: 1px solid rgba(255, 255, 255, .09); border-radius: 16px; box-shadow: 0 20px 50px -14px rgba(0, 0, 0, .7), inset 0 1px 0 rgba(255, 255, 255, .07);
-  display: grid; grid-template-columns: 1fr minmax(320px, 1.3fr) 1fr; align-items: center; gap: 18px; padding: 0 12px 0 16px; z-index: 20;
+  display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(300px, 1fr) minmax(0, 1.25fr); align-items: center; gap: 18px; padding: 0 12px 0 16px; z-index: 20;
 }
 .p-now { display: flex; align-items: center; gap: 12px; min-width: 0; cursor: pointer; border-radius: 10px; padding: 6px; transition: background .2s; }
 .p-now:hover { background: var(--hover); }
@@ -470,8 +485,22 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .p-next-meta small { display: block; font-size: 10px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
 .p-next-meta b { display: block; font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .p-next.is-end b { color: var(--text-2); font-weight: 500; }
-@media (max-width: 1250px) { .p-next-meta, .p-next img, #p-format { display: none; } .p-next { background: none; padding: 0; } }
+/* lecteur étroit (petite fenêtre ou interface agrandie) : on garde l'essentiel. Mesuré sur le lecteur lui-même,
+   pas sur la fenêtre : la largeur utile dépend aussi de la taille de l'interface. */
+.player { container-type: inline-size; container-name: player; }
+@media (max-width: 1250px) { .player { grid-template-columns: minmax(0, 1.2fr) minmax(300px, 1fr) auto; } }
+html[data-size] .player { grid-template-columns: minmax(0, 1.2fr) minmax(280px, 1fr) auto; }
+html[data-size="xl"] .player { grid-template-columns: minmax(0, 1fr) minmax(250px, 1fr) auto; gap: 12px; }
+@container player (max-width: 960px) { .p-next-meta, .p-next img, #p-format { display: none; } .p-next { background: none; box-shadow: none; padding: 0; flex: none; min-width: 0; } }
+@container player (max-width: 780px) { .vol-ic, .slider.vol { display: none; } .p-case { width: 96px; } .p-art { width: 78px; height: 78px; } .p-cd { width: 70px; height: 70px; } .p-controls { gap: 10px; } }
 #p-format:empty { display: none; }
+
+/* texte trop long pour sa place (titre, artiste — album, « Ensuite ») : il défile lentement, aller puis retour,
+   au lieu d'être coupé (--over = ce qui dépasse, --dur = durée, posés par app.js) */
+.mq { display: inline-block; min-width: max-content; white-space: nowrap; }
+.scrolls { text-overflow: clip !important; -webkit-mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent); mask-image: linear-gradient(90deg, #000 calc(100% - 20px), transparent); }
+.scrolls .mq { padding-right: 20px; animation: mq var(--dur, 10s) ease-in-out 1.6s infinite; }
+@keyframes mq { 0%, 10% { transform: none; } 45%, 58% { transform: translateX(calc(-1 * var(--over, 0px))); } 92%, 100% { transform: none; } }
 
 /* changement de titre : le texte glisse, la pochette du boîtier fait un petit bond (classe « swap » posée par app.js) */
 .swap > .p-title, .swap > .p-sub, .swap.np-info > .np-title, .swap.np-info > .np-artist, .swap.np-info > .np-album, .swap > #p-next-title { animation: text-swap .55s var(--ease-out) backwards; }
@@ -511,14 +540,14 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .np-close:hover { background: rgba(255, 255, 255, .12); }
 .np-close svg { transition: transform .45s var(--spring); }
 .np-close:hover svg { transform: translateY(3px); }
-.np-body { position: relative; z-index: 1; height: 100%; display: flex; align-items: center; justify-content: center; gap: 7vw; padding: 60px 6vw; }
+.np-body { position: relative; z-index: 1; height: 100%; display: flex; align-items: center; justify-content: center; gap: calc(7vw / var(--zoom)); padding: 60px 6vw; }
 .np-stage { perspective: 1400px; flex: none; }
-.np-cover { position: relative; width: min(46vh, 40vw); height: min(46vh, 40vw); border-radius: 12px; transform-style: preserve-3d; transition: transform .7s var(--ease), box-shadow .7s var(--ease); box-shadow: 0 50px 90px -30px rgba(0, 0, 0, .8), 0 20px 30px -15px rgba(0, 0, 0, .4); animation: float 7s ease-in-out infinite; }
+.np-cover { position: relative; width: min(46vh / var(--zoom), 40vw / var(--zoom)); height: min(46vh / var(--zoom), 40vw / var(--zoom)); border-radius: 12px; transform-style: preserve-3d; transition: transform .7s var(--ease), box-shadow .7s var(--ease); box-shadow: 0 50px 90px -30px rgba(0, 0, 0, .8), 0 20px 30px -15px rgba(0, 0, 0, .4); animation: float 7s ease-in-out infinite; }
 .np-cover img { width: 100%; height: 100%; object-fit: cover; border-radius: inherit; }
 .np-cover .glare { opacity: .7; }
 .np:not(.is-playing) .np-cover { transform: scale(.82) !important; box-shadow: 0 20px 40px -20px rgba(0, 0, 0, .6); animation-play-state: paused; }
 @keyframes float { 0%, 100% { translate: 0 0; } 50% { translate: 0 -8px; } }
-.np-info { width: min(420px, 40vw); }
+.np-info { width: min(420px, 40vw / var(--zoom)); }
 .np-title { font: 700 28px/1.15 -apple-system, "SF Pro Display", sans-serif; letter-spacing: -.02em; }
 .np-artist { display: inline-block; font-size: 19px; color: rgba(255, 255, 255, .75); margin-top: 6px; cursor: pointer; }
 .np-artist:hover { text-decoration: underline; }

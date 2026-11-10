@@ -430,6 +430,61 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     const sheen = await page.evaluate(() => { const a = document.querySelector('.cf-item.center .gloss').getAnimations({ subtree: true }).find((x) => x.animationName === 'cf-sheen'); const k = a.effect.getKeyframes(); return { start: k.filter((f) => f.transform === k[0].transform).at(-1).offset, dur: a.effect.getTiming().duration, delay: a.effect.getTiming().delay }; });
     assert.ok(sheen.start > 0.8 && sheen.dur === 9000 && sheen.delay === 0, JSON.stringify(sheen));
   });
+
+  test('bouton « Aa » : trois tailles d’interface, gardées sur l’appareil, sans rien faire déborder', async () => {
+    await go('#/albums', '.card[data-album]');
+    const state = () => page.evaluate(() => ({
+      size: document.documentElement.dataset.size || '', saved: JSON.parse(localStorage.getItem('dq.size') || '""'),
+      card: document.querySelector('.card .tilt').getBoundingClientRect().width, grey: getComputedStyle(document.documentElement).getPropertyValue('--text-3').trim(),
+      app: document.querySelector('.app').getBoundingClientRect().height, player: document.querySelector('#player').getBoundingClientRect(), w: innerWidth, h: innerHeight,
+      pill: Math.abs(document.querySelector('.nav-pill').getBoundingClientRect().top - document.querySelector('nav a.active').getBoundingClientRect().top),
+    }));
+    const normal = await state();
+    assert.equal(normal.size, '');
+    const seen = [];
+    for (const expected of ['l', 'xl']) {
+      await page.click('#size-btn'); await sleep(700);
+      const st = await state(); seen.push(st);
+      assert.equal(st.size, expected); assert.equal(st.saved, expected, 'choix gardé');
+      assert.ok(Math.abs(st.app - st.h) < 2, `l’app remplit la fenêtre sans dépasser (${st.app} / ${st.h})`);
+      assert.ok(st.player.right <= st.w && st.player.bottom <= st.h, 'le lecteur reste dans la fenêtre');
+      assert.ok(st.pill < 2, 'la pastille de navigation reste sur sa ligne');
+      assert.notEqual(st.grey, normal.grey, 'petits textes gris éclaircis');
+    }
+    assert.match(await page.textContent('#toast'), /Très grand/);
+    // le lecteur agrandi garde ses commandes et son titre lisibles (rien ne se chevauche)
+    const boxes = await page.$$eval('#player .p-meta, #player .p-controls, #b-queue', (els) => els.map((e) => { const r = e.getBoundingClientRect(); return [r.left, r.right]; }));
+    assert.ok(boxes[0][1] <= boxes[1][0] + 1 && boxes[1][1] <= boxes[2][0] + 1, JSON.stringify(boxes));
+    // rechargement : la taille est retrouvée ; un clic de plus revient à « Normal »
+    await page.reload(); await page.waitForSelector('.card[data-album]');
+    assert.equal((await state()).size, 'xl');
+    await page.click('#size-btn'); await sleep(500);
+    const back = await state();
+    assert.equal(back.size, ''); assert.ok(Math.abs(back.card - normal.card) < 1);
+  });
+
+  test('lecteur : un texte trop long défile au lieu d’être coupé ; album sans pochette : pochette neutre', async () => {
+    await go(`#/album/${album('Nuit Blanche').id}`, '.tracklist tr[data-track]');
+    await page.click('.tracklist tr[data-track]');
+    await page.waitForFunction(() => document.querySelector('#p-title').textContent === 'Minuit pile');
+    assert.equal(await page.textContent('#p-sub'), 'Les Étoiles Filantes — Nuit Blanche', 'texte entier, non tronqué');
+    assert.equal(await page.$eval('#p-sub', (e) => e.classList.contains('scrolls')), false, 'assez de place : pas de défilement');
+    await page.setViewportSize({ width: 900, height: 700 });
+    await page.waitForFunction(() => document.querySelector('#p-sub').classList.contains('scrolls'));
+    assert.equal(await page.$eval('#p-sub .mq', (e) => getComputedStyle(e).animationName), 'mq');
+    assert.ok(parseFloat(await page.$eval('#p-sub', (e) => e.style.getPropertyValue('--over'))) > 6);
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.waitForFunction(() => !document.querySelector('#p-sub').classList.contains('scrolls'));
+    await page.click('#b-play'); await page.waitForFunction(() => document.body.classList.contains('paused'));
+    // album sans pochette : image neutre dans la grille, et son nom sur le boîtier du Cover Flow
+    const bare = album('Café Serré');
+    await go('#/albums', '.card[data-album]');
+    await page.waitForFunction((id) => /blank\.svg$/.test(document.querySelector(`.card[data-album="${id}"] img`).src), bare.id);
+    await go(`#/flow/${bare.id}`, '.cf-item');
+    assert.equal((await page.textContent('.cf-item .cf-title b')), 'Café Serré');
+    assert.equal(await page.$$eval('.cf-title', (e) => e.length), 1, 'seulement pour l’album sans pochette');
+    await page.waitForFunction((id) => /blank\.svg$/.test(document.querySelector('.cf-item .cf-title').parentElement.querySelector('img').src));
+  });
 });
 
 const location = (url) => new URL(url).hash;
