@@ -24,12 +24,49 @@ let searchIndex = null;
 const getIndex = () => (searchIndex ||= buildIndex(LIB));
 const T = new Map(), A = new Map(), R = new Map();
 
+// ---------- Mouvement : petites aides partagées ----------
+const calm = () => matchMedia('(prefers-reduced-motion: reduce)').matches;
+// rejoue une animation CSS liée à une classe (changement de titre, étoile…)
+function replay(el, cls = 'swap') { if (!el) return; el.classList.remove(cls); void el.offsetWidth; el.classList.add(cls); }
+// arrivée en cascade : les premiers éléments de chaque grille d'une page reçoivent un rang (--k)
+const STAGGER = '.grid, .artist-grid, .mix-grid, .tiles, .shelf, .chip-row, .facts';
+function stagger(root) {
+  let k = 0;
+  for (const box of $$(STAGGER, root)) {
+    const kids = [...box.children].slice(0, 24);
+    kids.forEach((el, i) => { el.classList.add('st'); el.style.setProperty('--k', Math.min(k + i, 30)); });
+    k += Math.min(kids.length, 8);
+  }
+}
+// un nombre qui défile jusqu'à sa valeur (statistiques de la bibliothèque)
+function countTo(el, to, fmt) {
+  const from = +el.dataset.n || 0; el.dataset.n = to;
+  if (from === to || calm() || document.hidden) { el.textContent = fmt(to); return; }
+  const t0 = performance.now(), dur = 900;
+  const step = (now) => {
+    if (+el.dataset.n !== to) return; // une valeur plus récente a pris le relais
+    const p = Math.min(1, (now - t0) / dur), e = 1 - Math.pow(1 - p, 4);
+    el.textContent = fmt(Math.round(from + (to - from) * e));
+    if (p < 1) requestAnimationFrame(step);
+  };
+  requestAnimationFrame(step);
+}
+// pastille de la page active dans la colonne : glisse d'une ligne à l'autre
+function movePill() {
+  const box = $('.sidebar nav'); let pill = $('.nav-pill', box);
+  if (!pill) { pill = document.createElement('span'); pill.className = 'nav-pill'; pill.setAttribute('aria-hidden', 'true'); box.prepend(pill); box.classList.add('has-pill'); }
+  const a = $('a.active', box);
+  if (!a) { pill.classList.remove('on'); return; }
+  if (!pill.classList.contains('on')) { pill.style.transition = 'none'; requestAnimationFrame(() => { pill.style.transition = ''; pill.classList.add('on'); }); } // première apparition : sur place
+  pill.style.transform = `translateY(${a.offsetTop}px)`; pill.style.height = a.offsetHeight + 'px';
+}
+
 function toast(msg) { const t = $('#toast'); t.textContent = msg; t.classList.add('show'); clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('show'), 2600); }
 
 function metaState(m) {
   if (!m) return '—';
   const n = m.pendingArtists + m.pendingAlbums;
-  if (!n) return '<span style="color:#30d158">● Prêtes hors ligne</span>';
+  if (!n) return '<span style="color:#30d158"><span class="dot">●</span> Prêtes hors ligne</span>';
   if (m.syncing) return `Téléchargement… (${n})`;
   return m.online === false ? `${n} en attente (réseau)` : `${n} en attente`;
 }
@@ -42,8 +79,9 @@ async function loadLibrary() {
   r.artists.forEach((a) => R.set(a.id, a));
   const total = r.albums.reduce((s, a) => s + a.duration, 0);
   const n = (x) => x.toLocaleString('fr-FR');
-  $('#stats').innerHTML = [[r.albums.length, 'albums'], [r.artists.length, 'artistes'], [r.tracks.length, 'titres'], [Math.round(total / 3600) + ' h', 'd’écoute']]
-    .map(([v, l]) => `<div><b>${typeof v === 'number' ? n(v) : v}</b><span>${l}</span></div>`).join('');
+  const stats = [[r.albums.length, 'albums', n], [r.artists.length, 'artistes', n], [r.tracks.length, 'titres', n], [Math.round(total / 3600), 'd’écoute', (v) => v + ' h']];
+  if (!$('#stats b')) $('#stats').innerHTML = stats.map(([, l]) => `<div><b></b><span>${l}</span></div>`).join('');
+  $$('#stats b').forEach((b, i) => countTo(b, stats[i][0], stats[i][2]));
   const lossyN = r.albums.filter((a) => a.lossy).length;
   const lossless = !lossyN ? 'FLAC sans perte' : `<a href="#/mp3" class="lossy-link" title="Voir les albums avec perte et télécharger la liste">${WARN}${n(lossyN)} album${lossyN > 1 ? 's' : ''} en ${lossyN && r.albums.filter((a) => a.lossy).every((a) => a.lossyCodec === 'MP3') ? 'MP3' : 'avec perte'}</a>`;
   const when = r.scanning ? `Indexation ${Math.floor(scanMeter()(r).pct)} %` : r.scannedAt ? new Date(r.scannedAt).toLocaleString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : '—';
@@ -120,7 +158,7 @@ function attachTilt(root, max = 12) {
     const card = e.target.closest('.tilt-host'); if (!card) return;
     const el = card.querySelector('.tilt'); const r = el.getBoundingClientRect();
     const px = (e.clientX - r.left) / r.width, py = (e.clientY - r.top) / r.height;
-    el.style.transition = 'transform .12s linear, box-shadow .5s';
+    el.style.transition = 'transform .12s linear, box-shadow .5s, scale .45s var(--spring)';
     el.style.transform = `${card.classList.contains('card') ? 'perspective(900px) ' : ''}rotateX(${(0.5 - py) * max}deg) rotateY(${(px - 0.5) * max}deg) translateZ(10px)`;
     el.style.setProperty('--gx', px * 100 + '%'); el.style.setProperty('--gy', py * 100 + '%');
   });
@@ -224,14 +262,18 @@ function route() {
   if (name === 'tracks') name = 'selections'; // ancienne page « Titres »
   if (cleanup) { cleanup(); cleanup = null; }
   $$('nav a').forEach((a) => a.classList.toggle('active', a.dataset.nav === name || (name === 'album' && a.dataset.nav === 'albums') || (name === 'artist' && a.dataset.nav === 'artists') || (name === 'selection' && a.dataset.nav === 'selections')));
+  movePill();
   document.body.classList.toggle('flow-mode', name === 'flow' || !name);
   document.body.classList.toggle('tinted', name === 'album');
-  view.classList.remove('view-enter'); void view.offsetWidth; view.classList.add('view-enter');
+  const typing = name === 'search' && prevName === 'search' && currentHash; // résultats qui se précisent : pas de nouvelle entrée en scène
+  if (!typing) { view.classList.remove('view-enter'); void view.offsetWidth; view.classList.add('view-enter'); }
+  clearTimeout(route._t); route._t = setTimeout(() => view.classList.remove('view-enter'), 1800);
   view.scrollTop = 0;
   if (['flow', 'albums', 'artists', 'selections'].includes(name)) store.set('lastView', name);
   ({ flow: viewFlow, albums: viewAlbums, album: viewAlbum, artists: viewArtists, artist: viewArtist, selections: viewSelections, selection: viewSelection, search: viewSearch, mp3: viewLossy }[name] || viewFlow)(arg && decodeURIComponent(arg));
   if (['album', 'artist', 'selection', 'mp3'].includes(name)) addBackButton();
   if (['albums', 'artists'].includes(name) && name !== prevName) returnToSpot(name, prevHash);
+  if (!typing) stagger(view); // après le retour à la position : la cascade décale les cartes de quelques pixels
   nav.makeFocusable(view);
   if (name !== 'search' || document.activeElement !== $('#search')) nav.restore(location.hash);
   currentHash = location.hash;
@@ -573,7 +615,8 @@ async function toggleStar(id) {
   for (const [tid, hit] of Object.entries(r.hits)) {
     const x = T.get(tid); if (!x) continue;
     x.hit = hit;
-    $$(`tr[data-track="${tid}"] [data-star]`).forEach((el) => el.outerHTML = starBtn(x));
+    $$(`tr[data-track="${tid}"] [data-star]`).forEach((el) => { el.outerHTML = starBtn(x); });
+    if (hit) $$(`tr[data-track="${tid}"] [data-star]`).forEach((el) => el.classList.add('just'));
   }
   mixCache = null; // « Les classiques » suit les étoiles
 }
@@ -992,6 +1035,12 @@ syncButtons();
 let npBg = 0;
 function updateNowPlaying(t) {
   const a = A.get(t.albumId);
+  if (updateNowPlaying.last && updateNowPlaying.last !== t.id) { // le texte glisse, la pochette change en fondu
+    replay($('#player .p-meta')); replay($('#np .np-info'));
+    if (T.get(updateNowPlaying.last)?.albumId !== t.albumId) { replay($('#player .p-art')); replay($('#np-cover')); }
+  }
+  updateNowPlaying.last = t.id;
+  $('#np-cover').style.setProperty('--art', `url('${cover(t.albumId)}')`);
   $('#p-cover').src = cover(t.albumId);
   document.body.classList.add('has-track');
   coverGradient(t.albumId).then(([c1, c2]) => { if (player.current !== t.id) return; const pl = $('#player'); pl.style.setProperty('--pc1', c1.join(' ')); pl.style.setProperty('--pc2', c2.join(' ')); });
@@ -1030,18 +1079,21 @@ function renderNext() {
   const nextPos = player.pos + 1 < player.order.length ? player.pos + 1 : player.repeat === 'all' && player.order.length > 1 ? 0 : -1;
   const t = nextPos >= 0 ? T.get(player.queue[player.order[nextPos]]) : null;
   $('#p-next').classList.toggle('is-end', !t);
-  $('#p-next-title').textContent = t ? t.title : player.queue.length ? 'Fin de la file' : 'Rien en attente';
+  const label = t ? t.title : player.queue.length ? 'Fin de la file' : 'Rien en attente';
+  if ($('#p-next-title').textContent !== label && renderNext.seen) { replay($('.p-next-meta')); if (t) replay($('#p-next-cover')); }
+  renderNext.seen = true;
+  $('#p-next-title').textContent = label;
   $('#p-next-title').title = t ? `${t.title} — ${t.artist}` : '';
   const img = $('#p-next-cover'); if (t) img.src = cover(t.albumId); else img.removeAttribute('src');
 }
 function renderQueue() {
   renderNext();
   const box = $('#queue-list'); if (!player.queue.length) { $('#q-clear').hidden = true; box.innerHTML = '<div class="empty">Rien en attente.<br><small>Glissez des titres ou des albums ici.</small></div>'; return; }
-  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}" tabindex="0"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><div class="q-line"><b>${esc(t.title)}</b>${t.hit ? STAR : ''}</div><span>${esc(t.artist)}</span></div>${i > player.pos ? `<button class="q-remove" data-remove="${i}" title="Retirer de la file (Suppr)" aria-label="Retirer de la file"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>` : ''}</div>`; };
+  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}" style="--k:${Math.min(i - player.pos + 1, 16)}" tabindex="0"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><div class="q-line"><b>${esc(t.title)}</b>${t.hit ? STAR : ''}</div><span>${esc(t.artist)}</span></div>${i > player.pos ? `<button class="q-remove" data-remove="${i}" title="Retirer de la file (Suppr)" aria-label="Retirer de la file"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>` : ''}</div>`; };
   const upcoming = player.order.slice(player.pos + 1, player.pos + 101).map((_, k) => item(player.pos + 1 + k)).join('');
   $('#q-clear').hidden = player.pos >= player.order.length - 1;
   const top = box.scrollTop;
-  box.innerHTML = `<div class="q-label">En cours</div>${item(player.pos)}<div class="q-label">Ensuite${player.shuffle ? ' · aléatoire' : ''}</div>${upcoming || '<div class="empty" style="padding:20px">Fin de la file</div>'}`;
+  box.innerHTML = `<div class="q-label">En cours</div>${item(player.pos)}<div class="q-label" style="--k:1">Ensuite${player.shuffle ? ' · aléatoire' : ''}</div>${upcoming || '<div class="empty" style="padding:20px">Fin de la file</div>'}`;
   box.scrollTop = top;
 }
 
@@ -1102,10 +1154,20 @@ $('#queue-list').addEventListener('click', (e) => {
 // retire un titre à venir ; au clavier, le focus passe au titre suivant (ou précédent en fin de file)
 function removeFromQueue(i) {
   const hadFocus = document.activeElement?.closest?.('#queue-list');
+  const el = $(`#queue-list .q-item[data-q="${i}"]`);
+  if (el && !el.classList.contains('leaving') && !calm()) { // la ligne s'efface en se repliant, puis la file se met à jour
+    const id = player.queue[player.order[i]];
+    el.style.height = el.offsetHeight + 'px'; void el.offsetWidth; el.classList.add('leaving');
+    setTimeout(() => { if (player.queue[player.order[i]] === id) removeNow(i, hadFocus); else renderQueue(); }, 190); return; // file modifiée entre-temps : on ne retire rien
+  }
+  removeNow(i, hadFocus);
+}
+function removeNow(i, hadFocus) {
   player.remove(i);
   if (hadFocus || nav.usingKeys) { const next = $(`#queue-list .q-item[data-q="${i}"]`) || $(`#queue-list .q-item[data-q="${i - 1}"]`); if (next) nav.focusEl(next); }
 }
-$('#b-queue').onclick = () => { const open = $('#queue').classList.toggle('open'); $('#b-queue').classList.toggle('on'); if (open && nav.usingKeys) setTimeout(() => { nav.makeFocusable($('#queue')); nav.focusEl($('#queue .q-item.current') || $('#q-close')); }, 50); };
+$('#b-queue').onclick = () => { const open = $('#queue').classList.toggle('open'); $('#b-queue').classList.toggle('on');
+  if (open) { const q = $('#queue'); q.classList.add('just-opened'); clearTimeout(q._t); q._t = setTimeout(() => q.classList.remove('just-opened'), 1100); } if (open && nav.usingKeys) setTimeout(() => { nav.makeFocusable($('#queue')); nav.focusEl($('#queue .q-item.current') || $('#q-close')); }, 50); };
 $('#q-clear').onclick = () => player.clearUpcoming();
 $('#p-next').onclick = (e) => { if (!e.target.closest('#b-queue')) $('#b-queue').click(); };
 $('#q-close').onclick = () => { $('#queue').classList.remove('open'); $('#b-queue').classList.remove('on'); };

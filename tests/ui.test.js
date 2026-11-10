@@ -369,6 +369,41 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
       assert.deepEqual(hits, ['Minuit pile']);
     } finally { await p2.close(); await s2.stop(); for (const d of [cache, music]) fs.rmSync(d, { recursive: true, force: true }); }
   });
+
+  test('mouvement : pastille de navigation, cascade, lecture ⇄ pause, changement de titre, file', async () => {
+    // la pastille de la colonne suit la page active
+    const onActive = () => page.waitForFunction(() => {
+      const p = document.querySelector('.nav-pill'), a = document.querySelector('nav a.active');
+      return p?.classList.contains('on') && Math.abs(p.getBoundingClientRect().top - a.getBoundingClientRect().top) < 1;
+    });
+    await go('#/artists', '[data-artist]'); await onActive();
+    await go('#/albums', '.card[data-album]'); await onActive();
+    // les premières cartes arrivent en cascade (rang croissant)
+    const ranks = await page.$$eval('.grid .card', (els) => els.slice(0, 3).map((e) => [e.classList.contains('st'), e.style.getPropertyValue('--k')]));
+    assert.deepEqual(ranks, [[true, '0'], [true, '1'], [true, '2']]);
+    // lecture ⇄ pause : les deux pictogrammes se fondent (aucun n'est retiré de la page)
+    const icons = () => page.$eval('#b-play', (b) => ['.i-play', '.i-pause'].map((s) => getComputedStyle(b.querySelector(s)).opacity).join(' '));
+    await go(`#/album/${album('Nuit Blanche').id}`, '.tracklist tr[data-track]');
+    await page.click('.tracklist tr[data-track]');
+    await page.waitForFunction(() => document.body.classList.contains('is-playing'));
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#b-play .i-pause')).opacity === '1');
+    assert.equal(await icons(), '0 1');
+    // titre suivant : le texte du lecteur rejoue son entrée
+    await page.click('#b-next');
+    await page.waitForFunction(() => document.querySelector('#player .p-meta').classList.contains('swap'));
+    assert.equal(await page.$eval('#player .p-title', (e) => getComputedStyle(e).animationName), 'text-swap');
+    await page.click('#b-play'); await page.waitForFunction(() => document.body.classList.contains('paused'));
+    await page.waitForFunction(() => getComputedStyle(document.querySelector('#b-play .i-play')).opacity === '1');
+    assert.equal(await icons(), '1 0');
+    // « À suivre » : les titres glissent en cascade à l'ouverture
+    await page.click('#b-queue'); await page.waitForSelector('#queue.open.just-opened');
+    assert.equal(await page.$eval('#queue-list .q-item', (e) => getComputedStyle(e).animationName), 'q-in');
+    await page.click('#q-close');
+    // animations réduites demandées par le système : plus de cascade ni de battement
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    assert.equal(await page.$eval('.brand-mark', (e) => getComputedStyle(e).animationName), 'none');
+    await page.emulateMedia({ reducedMotion: 'no-preference' });
+  });
 });
 
 const location = (url) => new URL(url).hash;
