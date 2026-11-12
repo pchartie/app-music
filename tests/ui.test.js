@@ -387,6 +387,50 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     } finally { await p2.close(); await s2.stop(); for (const d of [cache, music]) fs.rmSync(d, { recursive: true, force: true }); }
   });
 
+  test('« pas pour moi » : pouce ou touche -, titre grisé et sauté à la lecture, sauf choisi à la main', async () => {
+    const cache = fs.mkdtempSync(path.join(os.tmpdir(), 'appmusic-nope-'));
+    const music = makeLibrary(path.join(cache, '..', path.basename(cache) + '-music'));
+    let s2 = await startServer({ music, cache });
+    const nb = (await s2.api('/api/library')).body.albums.find((a) => a.title === 'Nuit Blanche');
+    const p2 = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+    const row = (t) => `.tracklist tr[data-track]:has(.tt:text-is("${t}"))`;
+    const disliked = () => p2.$$eval('.tracklist tr.disliked .tt', (els) => els.map((e) => e.firstChild.textContent));
+    const title = (t) => p2.waitForFunction((x) => document.querySelector('#p-title').textContent === x, t);
+    try {
+      await p2.goto(s2.url + `/#/album/${nb.id}`); await p2.waitForSelector('.tracklist tr[data-track]');
+      assert.equal(await p2.$eval(`${row('Néons')} .nope`, (e) => getComputedStyle(e).opacity), '0', 'pouce caché au repos');
+      // clic sur le pouce : grisé, sans lancer la lecture
+      await p2.hover(row('Boulevard désert')); await p2.click(`${row('Boulevard désert')} [data-dislike]`);
+      await p2.waitForSelector(`${row('Boulevard désert')}.disliked .nope.on`);
+      assert.equal(await p2.textContent('#p-title'), 'Aucune lecture');
+      // touche - sur la ligne
+      await p2.focus(row('Néons')); await p2.keyboard.press('-');
+      await p2.waitForSelector(`${row('Néons')}.disliked`);
+      assert.deepEqual(await disliked(), ['Boulevard désert', 'Néons']);
+      // lecture de l'album : les deux titres sont sautés (carte « Ensuite », suivant, précédent)
+      await p2.click('.hero-actions [data-act="play"]'); await title('Minuit pile');
+      await p2.waitForFunction(() => document.querySelector('#p-next-title').textContent === 'Aube');
+      await p2.click('#b-next'); await title('Aube');
+      await p2.click('#b-prev'); await title('Minuit pile');
+      // « À suivre » : les titres sautés restent visibles, en retrait
+      await p2.click('#b-queue'); await p2.waitForSelector('#queue.open');
+      assert.deepEqual(await p2.$$eval('#queue-list .q-item.disliked b', (els) => els.map((e) => e.textContent)), ['Boulevard désert', 'Néons']);
+      await p2.click('#q-close');
+      // choisi à la main : joué quand même
+      await p2.click(`${row('Néons')} .tt`); await title('Néons');
+      await p2.click('#b-play'); await p2.waitForFunction(() => document.body.classList.contains('paused'));
+      // gardé au redémarrage, et réversible
+      await s2.stop({ keep: true });
+      s2 = await startServer({ music, cache });
+      const lib2 = (await s2.api('/api/library')).body;
+      assert.deepEqual(lib2.tracks.filter((t) => t.dislike).map((t) => t.title).sort(), ['Boulevard désert', 'Néons']);
+      const neons = lib2.tracks.find((t) => t.title === 'Néons');
+      const r = await s2.api('/api/dislike', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: neons.id, dislike: false }) });
+      assert.deepEqual(r.body, { ids: [neons.id], dislike: false });
+      assert.deepEqual((await s2.api('/api/library')).body.tracks.filter((t) => t.dislike).map((t) => t.title), ['Boulevard désert']);
+    } finally { await p2.close(); await s2.stop(); for (const d of [cache, music]) fs.rmSync(d, { recursive: true, force: true }); }
+  });
+
   test('mouvement : pastille de navigation, cascade, lecture ⇄ pause, changement de titre, file', async () => {
     // la pastille de la colonne suit la page active
     const onActive = () => page.waitForFunction(() => {

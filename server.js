@@ -25,6 +25,7 @@ const LIB_FILE = path.join(CACHE, 'library.json');
 const LOSSY_LOG = path.join(CACHE, 'lossy-log.json'); // journal des albums avec perte (MP3…)
 const QUALITY_FILE = path.join(CACHE, 'quality.json'); // qualité réelle des MP3 (faux 320), lib/spectrum.js
 const ADDED_LOG = path.join(CACHE, 'added.json'); // date d'ajout de chaque album (« Récemment ajoutés »)
+const DISLIKES_FILE = path.join(CACHE, 'dislikes.json'); // titres « pas pour moi », sautés à la lecture (« artiste|titre » -> true)
 const STARS_FILE = path.join(CACHE, 'stars.json'); // étoiles ajoutées ou retirées à la main (« artiste|titre » -> true/false)
 const AUDIO_EXT = new Set(['.flac', '.mp3', '.m4a', '.aac', '.ogg', '.opus', '.wav', '.aiff', '.aif']);
 const UA = 'AppMusic/1.0 (application musicale locale)';
@@ -671,6 +672,16 @@ function setStar(t, on) {
   fs.writeFileSync(STARS_FILE, JSON.stringify(stars, null, 1));
   return Object.fromEntries(library.tracks.filter((x) => starKey(x) === key).map((x) => [x.id, hitRank(x)]));
 }
+// Titres « pas pour moi » : même clé que les étoiles (toutes les versions d'un morceau), sautés par le lecteur
+let dislikes = {};
+try { dislikes = JSON.parse(fs.readFileSync(DISLIKES_FILE, 'utf8')); } catch {}
+function setDislike(t, on) {
+  const key = starKey(t);
+  if (on) dislikes[key] = true; else delete dislikes[key];
+  fs.mkdirSync(CACHE, { recursive: true });
+  fs.writeFileSync(DISLIKES_FILE, JSON.stringify(dislikes, null, 1));
+  return library.tracks.filter((x) => starKey(x) === key).map((x) => x.id);
+}
 // Nettoyage : les articles complets ne sont plus conservés (seule la première phrase est affichée)
 for (const [key, m] of metaMem) if (m?.wiki?.full !== undefined) { delete m.wiki.full; saveMeta(key, m); }
 
@@ -811,7 +822,7 @@ async function handle(req, res, lan = false) {
       return json(res, {
         albums: library.albums.map((a) => { const m = metaMem.get('album-' + a.id) || {}; return { ...a, genres: m.genres || [], label: m.label || null, firstRelease: m.firstRelease || null }; }),
         artists: library.artists.map((a) => { const m = metaMem.get('artist-' + a.id) || {}; return { ...a, tags: m.tags || [], country: m.country || null, area: m.beginArea || null, kind: m.type || null, begin: m.begin || null }; }),
-        tracks: library.tracks.map(({ path: _p, mtime: _m, albumDir: _d, ...t }) => ({ ...t, hit: hitRank(t) })),
+        tracks: library.tracks.map(({ path: _p, mtime: _m, albumDir: _d, ...t }) => ({ ...t, hit: hitRank(t), ...(dislikes[starKey(t)] ? { dislike: true } : {}) })),
         scannedAt: library.scannedAt,
         scanning, scanProgress,
         bytes: library.tracks.reduce((s, t) => s + (t.size || 0), 0),
@@ -852,6 +863,13 @@ async function handle(req, res, lan = false) {
       const t = library.tracks.find((x) => x.id === id);
       if (!t) return json(res, { error: 'titre introuvable' }, 404);
       return json(res, { hits: setStar(t, !!star) });
+    }
+    // « pas pour moi » : { id, dislike: true|false } ; renvoie { ids, dislike } pour toutes les versions du morceau
+    if (p === '/api/dislike' && req.method === 'POST') {
+      const { id, dislike } = JSON.parse((await readBody(req, 1e4)).toString() || '{}');
+      const t = library.tracks.find((x) => x.id === id);
+      if (!t) return json(res, { error: 'titre introuvable' }, 404);
+      return json(res, { ids: setDislike(t, !!dislike), dislike: !!dislike });
     }
     if (p === '/api/rescan' && req.method === 'POST') { scan(); return json(res, { ok: true }); }
     if (p === '/api/setup' && req.method === 'GET') return json(res, { musicDir: MUSIC_DIR, label: tilde(MUSIC_DIR), fromEnv: !!process.env.MUSIC_DIR, candidates: await candidates() });

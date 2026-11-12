@@ -322,7 +322,7 @@ main:has(.flow) { padding-bottom: 0; overflow: hidden; }
 .tr:first-child td, .disc-head + .tr td { border-top: 0; }
 .tr:hover td { background: var(--hover); }
 .tr td:first-child { border-radius: 8px 0 0 8px; width: 40px; text-align: center; color: var(--text-3); font-variant-numeric: tabular-nums; }
-.tr td:last-child { border-radius: 0 8px 8px 0; text-align: right; color: var(--text-2); font-variant-numeric: tabular-nums; width: 60px; }
+.tr td:last-child { border-radius: 0 8px 8px 0; text-align: right; color: var(--text-2); font-variant-numeric: tabular-nums; width: 92px; white-space: nowrap; }
 .tr .tt { font-weight: 450; }
 .tr .ta { font-size: 12px; color: var(--text-2); }
 .tr.playing .tt { color: var(--accent); }
@@ -656,6 +656,21 @@ tr:hover .hit.off, tr:focus .hit.off, tr:focus-within .hit.off { opacity: .7; }
 .hit.off:hover { opacity: 1 !important; color: #ff6b81; transform: translateY(-1px) scale(1.25); }
 [data-star] { transition: transform .35s var(--spring), opacity .15s, color .2s; }
 .hit.just { animation: star-pop .7s var(--spring); }
+/* « Pas pour moi » : pouce discret au survol, gardé visible une fois choisi ; la ligne passe en retrait */
+.nope { display: inline-grid; place-items: center; width: 22px; height: 22px; margin-right: 10px; vertical-align: middle; border-radius: 6px; color: var(--text-3); opacity: 0; cursor: pointer; transition: opacity .15s, color .2s, transform .3s var(--spring); }
+.nope svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linejoin: round; stroke-linecap: round; }
+tr:hover .nope, tr:focus .nope, tr:focus-within .nope { opacity: .75; }
+.nope:hover { opacity: 1 !important; color: var(--text); transform: scale(1.18); }
+.nope.on { opacity: .9; color: var(--text-2); }
+.nope.on svg { fill: currentColor; fill-opacity: .9; }
+.nope.just { animation: nope-pop .55s var(--spring); }
+@keyframes nope-pop { 0% { transform: scale(.6) rotate(-14deg); } 60% { transform: scale(1.2) rotate(4deg); } }
+.cell-title .nope { margin: 0 0 0 auto; flex: none; }
+tr.disliked .tt, tr.disliked .ta, tr.disliked .num, tr.disliked .cell-title img, tr.disliked .hit, tr.disliked td:not(:first-child) a { opacity: .38; transition: opacity .3s; }
+tr.disliked .tt { text-decoration: line-through; text-decoration-color: rgba(255, 255, 255, .25); text-decoration-thickness: 1px; }
+.q-item.disliked img, .q-item.disliked .q-line b, .q-item.disliked > div > span { opacity: .4; }
+.q-nope { display: inline-grid; margin-left: 6px; color: var(--text-3); flex: none; }
+.q-nope svg { width: 11px; height: 11px; fill: currentColor; stroke: currentColor; stroke-width: 1.5; stroke-linejoin: round; }
 @keyframes star-pop { 0% { transform: scale(0) rotate(-140deg); } 60% { text-shadow: 0 0 14px rgba(255, 107, 129, .9); } 100% { transform: translateY(-1px); } }
 .tracklist.popular .tt { font-weight: 500; }
 

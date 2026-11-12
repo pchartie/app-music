@@ -683,6 +683,22 @@ async function toggleStar(id) {
   }
   mixCache = null; // « Les classiques » suit les étoiles
 }
+// « Pas pour moi » (pouce vers le bas) : le titre reste visible, grisé, et le lecteur le saute
+const THUMB = '<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M17 3.5v9.5M9.6 18.4 10.5 14H5a2 2 0 0 1-1.95-2.45l1.6-6.6A2 2 0 0 1 6.6 3.5H19a1.5 1.5 0 0 1 1.5 1.5v6.5A1.5 1.5 0 0 1 19 13h-2.2a2 2 0 0 0-1.8 1.1l-2.9 6.1a1.9 1.9 0 0 1-2.5-1.8Z"/></svg>';
+const dislikeBtn = (t) => `<span class="nope${t.dislike ? ' on' : ''}" data-dislike role="button" title="${t.dislike ? 'Titre sauté à la lecture · cliquer ou - pour le réécouter' : 'Pas pour moi : sauter ce titre (-)'}" aria-label="${t.dislike ? 'Ne plus sauter ce titre' : 'Sauter ce titre'}">${THUMB}</span>`;
+async function toggleDislike(id) {
+  const t = T.get(id); if (!t) return;
+  const on = !t.dislike;
+  const r = await fetch('/api/dislike', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, dislike: on }) }).then((x) => x.json()).catch(() => null);
+  if (!r?.ids) return toast('Impossible de modifier ce titre');
+  for (const tid of r.ids) {
+    const x = T.get(tid); if (!x) continue;
+    if (on) x.dislike = true; else delete x.dislike;
+    $$(`tr[data-track="${tid}"]`).forEach((row) => { row.classList.toggle('disliked', on); const b = $('[data-dislike]', row); if (b) { b.outerHTML = dislikeBtn(x); if (on) $('[data-dislike]', row).classList.add('just'); } });
+  }
+  toast(on ? 'Pas pour moi : ce titre sera sauté' : 'Ce titre ne sera plus sauté');
+  renderQueue();
+}
 // titre affiché sans les mentions techniques (« - Remastered 2021 », « (Remaster) »)
 const showTitle = (t) => t.replace(/\s*[-–]\s*(\d{4}\s*)?(remaster(ed)?|digital remaster|mono|stereo)(\s+(version|\d{4}))*\s*$/i, '').replace(/\s*[(\[](\d{4}\s*)?(remaster(ed)?|digitally remastered|remastered \d{4}|\d{4} remaster(ed)?)[^)\]]*[)\]]/i, '').trim() || t;
 function trackRows(ids, { showArtist, albumArtist, showAlbum, rank, discs = true } = {}) {
@@ -691,10 +707,10 @@ function trackRows(ids, { showArtist, albumArtist, showAlbum, rank, discs = true
     const t = T.get(id); let head = '';
     if (multi && t.disc !== disc) { disc = t.disc; head = `<tr class="disc-head"><td colspan="3">Disque ${disc}</td></tr>`; }
     const feat = showArtist || (albumArtist && t.artist !== albumArtist);
-    return `${head}<tr class="tr ${player.current === id ? 'playing' : ''}" data-track="${id}" data-n="${n}" draggable="true">
+    return `${head}<tr class="tr ${player.current === id ? 'playing' : ''}${t.dislike ? ' disliked' : ''}" data-track="${id}" data-n="${n}" draggable="true">
       <td><span class="num">${rank ? n + 1 : t.trackNo || n + 1}</span><span class="num-play">${ICON.play}</span>${ICON.eq}</td>
       <td><div class="tt">${esc(showTitle(t.title))}${starBtn(t)}</div>${showAlbum && showArtist ? `<div class="ta">${esc(t.artist)} · ${esc(t.album)}</div>` : showAlbum ? `<div class="ta">${esc(t.album)}</div>` : feat ? `<div class="ta">${esc(t.artist)}</div>` : ''}</td>
-      <td>${fmtTime(t.duration)}</td></tr>`;
+      <td>${dislikeBtn(t)}${fmtTime(t.duration)}</td></tr>`;
   }).join('');
 }
 
@@ -844,8 +860,8 @@ function viewTracks(_, filtered) {
     const th = (k, l, cls = '') => `<th data-k="${k}" class="${cls}">${l}${sort.k === k ? (sort.d > 0 ? ' ▲' : ' ▼') : ''}</th>`;
     const html = `<table class="songs"><colgroup><col style="width:38%"><col style="width:22%"><col style="width:26%"><col style="width:7%"><col style="width:7%"></colgroup>
       <thead><tr>${th('title', 'Titre')}${th('artist', 'Artiste')}${th('album', 'Album')}${th('year', 'Année', 'r')}${th('duration', 'Durée', 'r')}</tr></thead>
-      <tbody>${list.map((t, n) => `<tr data-track="${t.id}" data-n="${n}" draggable="true" class="${player.current === t.id ? 'playing' : ''}">
-        <td><div class="cell-title"><img loading="lazy" src="${cover(t.albumId)}" alt=""><span class="tt">${esc(showTitle(t.title))}</span>${starBtn(t)}</div></td>
+      <tbody>${list.map((t, n) => `<tr data-track="${t.id}" data-n="${n}" draggable="true" class="${player.current === t.id ? 'playing' : ''}${t.dislike ? ' disliked' : ''}">
+        <td><div class="cell-title"><img loading="lazy" src="${cover(t.albumId)}" alt=""><span class="tt">${esc(showTitle(t.title))}</span>${starBtn(t)}${dislikeBtn(t)}</div></td>
         <td><a href="#/artist/${t.artistId}">${esc(t.artist)}</a></td><td><a href="#/album/${t.albumId}">${esc(t.album)}</a></td>
         <td class="r">${t.year || ''}</td><td class="r">${fmtTime(t.duration)}</td></tr>`).join('')}</tbody></table>`;
     return { html, ids };
@@ -860,7 +876,7 @@ function viewTracks(_, filtered) {
       const hd = e.target.closest('th'); if (hd) { sort = { k: hd.dataset.k, d: sort.k === hd.dataset.k ? -sort.d : 1 }; store.set('trackSort', sort); render(); return; }
       if (e.target.closest('a')) return;
       // double-clic, ou OK au clavier : page Titres, le titre puis la suite de la liste ; résultats de recherche, ce titre seul
-      const tr = e.target.closest('tr[data-track]'); if (tr && e.detail !== 1) player.playList(filtered ? [tr.dataset.track] : ids, filtered ? 0 : +tr.dataset.n);
+      const tr = e.target.closest('tr[data-track]'); if (tr && e.detail !== 1) player.playList(filtered ? [tr.dataset.track] : ids, filtered ? 0 : +tr.dataset.n, { force: true });
     });
   };
   if (filtered) return render;
@@ -985,7 +1001,7 @@ view.addEventListener('click', (e) => {
   const card = e.target.closest('[data-album]:not([data-disc])'); if (card) { openFromCard(card); return; }
   const art = e.target.closest('[data-artist]'); if (art) { location.hash = `#/artist/${art.dataset.artist}`; return; }
   const tr = e.target.closest('.tracklist .tr');
-  if (tr) { const ids = $$('.tr', tr.closest('tbody')).map((x) => x.dataset.track); player.playList(ids, ids.indexOf(tr.dataset.track)); }
+  if (tr) { const ids = $$('.tr', tr.closest('tbody')).map((x) => x.dataset.track); player.playList(ids, ids.indexOf(tr.dataset.track), { force: true }); }
 });
 attachTilt(view);
 
@@ -997,14 +1013,25 @@ audio.preload = 'auto';
 const player = {
   queue: [], order: [], pos: -1, current: null,
   shuffle: store.get('shuffle', false), repeat: store.get('repeat', 'off'),
+  // opts.force : titre choisi à la main, joué même s'il est « pas pour moi » (sinon on part du suivant)
   playList(ids, start = 0, opts = {}) {
     if (!ids.length) return;
     if (opts.shuffle !== undefined) this.shuffle = opts.shuffle;
     this.queue = [...ids];
-    const first = start < 0 ? Math.floor(Math.random() * ids.length) : start;
+    const liked = ids.map((_, i) => i).filter((i) => !T.get(ids[i])?.dislike);
+    let first = start < 0 ? (liked.length ? liked[Math.floor(Math.random() * liked.length)] : 0) : start;
+    if (!opts.force && start >= 0 && !this.shuffle && T.get(ids[first])?.dislike) first = liked.find((i) => i > first) ?? liked[0] ?? first;
+    if (!opts.force && start >= 0 && this.shuffle && T.get(ids[first])?.dislike && liked.length) first = liked[Math.floor(Math.random() * liked.length)];
     this.order = this.queue.map((_, i) => i);
     if (this.shuffle) { this.order.splice(first, 1); shuffleArr(this.order); this.order.unshift(first); this.pos = 0; } else this.pos = first;
     this.load(true); syncButtons();
+  },
+  skips(i) { return !!T.get(this.queue[this.order[i]])?.dislike; },
+  // prochain rang à jouer (titres « pas pour moi » sautés) ; -1 s'il n'y en a pas
+  peekNext(auto = true) {
+    for (let i = this.pos + 1; i < this.order.length; i++) if (!this.skips(i)) return i;
+    if (this.repeat === 'all' || !auto) for (let i = 0; i < this.pos; i++) if (!this.skips(i)) return i;
+    return -1;
   },
   load(autoplay) {
     const id = this.queue[this.order[this.pos]]; if (!id) return;
@@ -1016,12 +1043,16 @@ const player = {
   },
   next(auto) {
     if (auto && this.repeat === 'one') { audio.currentTime = 0; audio.play(); return; }
-    if (this.pos < this.order.length - 1) this.pos++;
-    else if (this.repeat === 'all' || !auto) this.pos = 0;
-    else { audio.pause(); return; }
+    const i = this.peekNext(auto);
+    if (i < 0) { if (auto) audio.pause(); else audio.currentTime = 0; return; }
+    this.pos = i;
     this.load(true);
   },
-  prev() { if (audio.currentTime > 3 || this.pos === 0) { audio.currentTime = 0; return; } this.pos--; this.load(true); },
+  prev() {
+    let i = this.pos - 1; while (i >= 0 && this.skips(i)) i--;
+    if (audio.currentTime > 3 || i < 0) { audio.currentTime = 0; return; }
+    this.pos = i; this.load(true);
+  },
   toggle() { if (!this.current) { const a = LIB.albums[0]; if (a) this.playList(a.tracks); return; } audio.paused ? audio.play() : audio.pause(); },
   jump(i) { this.pos = i; this.load(true); },
   // Ajout et réorganisation de la file (positions = rangs dans l'ordre de lecture, toujours après le titre en cours)
@@ -1127,7 +1158,7 @@ if ('mediaSession' in navigator) {
 // carte « Ensuite » du lecteur : le prochain titre de la file
 function renderNext() {
   remoteLink.publish();
-  const nextPos = player.pos + 1 < player.order.length ? player.pos + 1 : player.repeat === 'all' && player.order.length > 1 ? 0 : -1;
+  const nextPos = player.peekNext(true);
   const t = nextPos >= 0 ? T.get(player.queue[player.order[nextPos]]) : null;
   $('#p-next').classList.toggle('is-end', !t);
   const label = t ? t.title : player.queue.length ? 'Fin de la file' : 'Rien en attente';
@@ -1140,7 +1171,7 @@ function renderNext() {
 function renderQueue() {
   renderNext();
   const box = $('#queue-list'); if (!player.queue.length) { $('#q-clear').hidden = true; box.innerHTML = '<div class="empty">Rien en attente.<br><small>Glissez des titres ou des albums ici.</small></div>'; return; }
-  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}" data-q="${i}" style="--k:${Math.min(i - player.pos + 1, 16)}" tabindex="0"${i > player.pos ? ' draggable="true"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><div class="q-line"><b>${esc(t.title)}</b>${t.hit ? STAR : ''}</div><span>${esc(t.artist)}</span></div>${i > player.pos ? `<button class="q-remove" data-remove="${i}" title="Retirer de la file (Suppr)" aria-label="Retirer de la file"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>` : ''}</div>`; };
+  const item = (i) => { const t = T.get(player.queue[player.order[i]]); return `<div class="q-item ${i === player.pos ? 'current' : ''}${t.dislike && i !== player.pos ? ' disliked' : ''}" data-q="${i}" style="--k:${Math.min(i - player.pos + 1, 16)}" tabindex="0"${i > player.pos ? ' draggable="true"' : ''}${t.dislike && i !== player.pos ? ' title="Pas pour moi : sera sauté"' : ''}><img loading="lazy" src="${cover(t.albumId)}" alt=""><div><div class="q-line"><b>${esc(t.title)}</b>${t.hit ? STAR : ''}${t.dislike && i !== player.pos ? `<span class="q-nope">${THUMB}</span>` : ''}</div><span>${esc(t.artist)}</span></div>${i > player.pos ? `<button class="q-remove" data-remove="${i}" title="Retirer de la file (Suppr)" aria-label="Retirer de la file"><svg viewBox="0 0 24 24"><path d="m7 7 10 10M17 7 7 17" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg></button>` : ''}</div>`; };
   const upcoming = player.order.slice(player.pos + 1, player.pos + 101).map((_, k) => item(player.pos + 1 + k)).join('');
   $('#q-clear').hidden = player.pos >= player.order.length - 1;
   const top = box.scrollTop;
@@ -1248,6 +1279,8 @@ function adjustSlider(el, dir) {
 }
 // clic sur l'étoile d'une ligne : ne lance pas la lecture
 for (const type of ['click', 'dblclick']) window.addEventListener(type, (e) => {
+  const no = e.target.closest?.('[data-dislike]');
+  if (no) { e.stopPropagation(); e.preventDefault(); if (type === 'click' && e.detail <= 1) toggleDislike(no.closest('[data-track]').dataset.track); return; }
   const st = e.target.closest?.('[data-star]'); if (!st) return;
   e.stopPropagation(); e.preventDefault();
   if (type === 'click' && e.detail <= 1) toggleStar(st.closest('[data-track]').dataset.track);
@@ -1271,6 +1304,7 @@ window.addEventListener('keydown', (e) => {
   // * sur une ligne de titre : ajouter ou retirer son étoile
   const row = document.activeElement?.closest?.('tr[data-track]');
   if (row && k === '*') { e.preventDefault(); return toggleStar(row.dataset.track); }
+  if (row && (k === '-' || e.code === 'NumpadSubtract')) { e.preventDefault(); return toggleDislike(row.dataset.track); }
   // Suppr (ou retour arrière) sur un titre à venir de « À suivre » : le retirer de la file
   const qItem = document.activeElement?.closest?.('#queue-list .q-item[draggable]');
   if (qItem && (k === 'Delete' || k === 'Backspace')) { e.preventDefault(); return removeFromQueue(+qItem.dataset.q); }

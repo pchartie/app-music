@@ -87,6 +87,10 @@ Quelques mots suffisent, même approximatifs : `metalica`, `rhcp`, `acdc`, `ann�
 Une étoile ★ signale les grands classiques, c'est-à-dire les titres classés au moins 800 000 en popularité sur Deezer
 (*Nothing Else Matters*, *Seven Nation Army*, *Mistral gagnant*…). Chaque page d'artiste commence par ses titres populaires.
 
+Un titre qui ne vous plaît pas ? Le pouce 👎 au bout de sa ligne (ou la touche `-`) le met de côté : il reste visible, grisé,
+et le lecteur le saute dans les albums, les playlists et la file « À suivre ». Choisi à la main, il est quand même joué.
+Toutes ses versions (studio, live, remaster) sont concernées ; un nouveau clic le rétablit. Le choix est gardé dans `cache/dislikes.json`.
+
 ## Sélections
 
 La page **Sélections** réunit des playlists toutes prêtes, calculées à partir de votre bibliothèque :
