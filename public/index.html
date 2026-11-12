@@ -42,7 +42,7 @@
   </div>
 
   <footer class="player" id="player">
-    <div class="p-now" id="p-now" title="Afficher la lecture en cours" tabindex="0" role="button">
+    <div class="p-now" id="p-now" title="Ouvrir l’album en cours" tabindex="0" role="button">
       <div class="p-case" aria-hidden="true"><div class="p-cd"></div><div class="p-art"><img id="p-cover" alt=""></div></div>
       <div class="p-meta">
         <div class="p-title" id="p-title">Aucune lecture</div>
@@ -74,30 +74,6 @@
       </div>
     </div>
   </footer>
-
-  <section class="np" id="np" aria-hidden="true">
-    <div class="np-bg"><img id="np-bg1" alt=""><img id="np-bg2" alt=""></div>
-    <button class="np-close icon-btn" id="np-close" title="Fermer (Échap)"><svg viewBox="0 0 24 24"><path d="m6 9 6 6 6-6" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-    <div class="np-body">
-      <div class="np-stage" id="np-stage"><div class="np-cover" id="np-cover"><div class="np-glow" aria-hidden="true"></div><img id="np-img" alt=""><div class="glare"></div></div></div>
-      <div class="np-info">
-        <div class="np-title" id="np-title"></div>
-        <a class="np-artist" id="np-artist"></a>
-        <div class="np-album" id="np-album"></div>
-        <div class="p-progress np-progress">
-          <span id="np-cur">0:00</span>
-          <div class="slider" id="np-seek" tabindex="0" role="slider" aria-label="Position"><div class="slider-fill"></div><div class="slider-knob"></div></div>
-          <span id="np-dur">0:00</span>
-        </div>
-        <div class="np-controls">
-          <button class="icon-btn" data-act="prev"><svg viewBox="0 0 24 24"><path d="M11.5 12 21 5.5v13zM2.5 12 12 5.5v13z" fill="currentColor"/></svg></button>
-          <button class="icon-btn big" data-act="toggle"><svg class="i-play" viewBox="0 0 24 24"><path d="M7 4.5v15l12.5-7.5z" fill="currentColor"/></svg><svg class="i-pause" viewBox="0 0 24 24"><rect x="6" y="4.5" width="4" height="15" rx="1" fill="currentColor"/><rect x="14" y="4.5" width="4" height="15" rx="1" fill="currentColor"/></svg></button>
-          <button class="icon-btn" data-act="next"><svg viewBox="0 0 24 24"><path d="M12.5 12 3 5.5v13zM21.5 12 12 5.5v13z" fill="currentColor"/></svg></button>
-        </div>
-        <div class="np-format" id="np-format"></div>
-      </div>
-    </div>
-  </section>
 
   <aside class="queue" id="queue" aria-hidden="true">
     <div class="queue-head"><h3>À suivre</h3><div class="q-actions"><button class="link-btn" id="q-clear" title="Retirer les titres à venir" hidden>Vider</button><button class="link-btn" id="q-close">Fermer</button></div></div>

@@ -103,6 +103,23 @@ describe('interface', { skip: !executablePath && 'aucun navigateur Chromium trou
     await page.waitForFunction(() => document.body.classList.contains('paused'));
   });
 
+  test('mini pochette du lecteur : ouvre l’album en cours (plus de plein écran), aussi au clavier', async () => {
+    const nb = album('Nuit Blanche');
+    assert.equal(await page.$('#np'), null, 'le plein écran a été retiré');
+    await go('#/albums', '.card[data-album]');
+    await page.click('#p-now');
+    await page.waitForFunction((h) => location.hash === h, `#/album/${nb.id}`);
+    await page.waitForSelector('.tracklist tr[data-track]');
+    // déjà sur l'album : on remonte en haut de la page
+    await page.evaluate(() => document.querySelector('#view').scrollTo(0, 400)); await sleep(100);
+    await page.click('#p-now');
+    await page.waitForFunction(() => document.querySelector('#view').scrollTop === 0);
+    // au clavier : Entrée sur la mini pochette
+    await go('#/artists', '[data-artist]');
+    await page.focus('#p-now'); await page.keyboard.press('Enter');
+    await page.waitForFunction((h) => location.hash === h, `#/album/${nb.id}`);
+  });
+
   test('bouton Retour : revient d’où l’on vient, et a un repli quand on arrive directement', async () => {
     const nb = album('Nuit Blanche');
     await go('#/selections', '.mix-card');

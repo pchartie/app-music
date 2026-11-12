@@ -5,7 +5,7 @@
 const ITEM = '[data-album]:not([data-disc]), [data-artist], [data-mix], tr[data-track], .q-item, [data-q], [data-chip]';
 const SEL = `a[href], button:not([disabled]), input:not([type=range]), [tabindex="0"], ${ITEM}`;
 const ZONES = ['.sidebar', '#view', '.player'];
-const OVERLAYS = ['#setup.open', '#remote.open', '#reader.open', '#queue.open', '#np.open'];
+const OVERLAYS = ['#setup.open', '#remote.open', '#reader.open', '#queue.open'];
 
 export let usingKeys = false;
 const memory = new Map(); // position du focus mémorisée par page, pour le retour arrière

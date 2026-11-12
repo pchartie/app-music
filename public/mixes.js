@@ -1,4 +1,4 @@
-// Sélections : les classiques ★, et des playlists toutes prêtes par style et par décennie.
+// Sélections : les classiques ★ (toutes styles confondus et par style), et des playlists toutes prêtes par style et par décennie.
 // Module sans dépendance au navigateur (testé dans tests/mixes.test.js).
 
 // Familles de styles (ordre d'affichage). Chaque album est rangé dans son style principal (et un second s'il pèse
@@ -8,6 +8,14 @@ export const MIX_STYLES = [
   ['chanson', 'Chanson française'], ['soul', 'Soul, funk & R&B'], ['blues', 'Blues'], ['jazz', 'Jazz'], ['electro', 'Électro'],
   ['folk', 'Folk & acoustique'], ['classique', 'Classique & musiques de film'], ['reggae', 'Reggae'],
 ];
+// titre des classiques ★ de chaque style
+const CLASSIC_TITLES = {
+  rock: 'Classiques du rock', 'hard-rock': 'Classiques du hard rock', metal: 'Classiques du metal', punk: 'Classiques du punk',
+  pop: 'Classiques de la pop', rap: 'Classiques du rap', chanson: 'Classiques de la chanson', soul: 'Classiques soul & funk',
+  blues: 'Classiques du blues', jazz: 'Classiques du jazz', electro: 'Classiques de l’électro', folk: 'Classiques folk',
+  classique: 'Grands thèmes & musiques de film', reggae: 'Classiques du reggae',
+};
+export const CLASSICS_MIN = 8; // titres ★ (distincts) nécessaires pour une playlist de classiques par style
 // étiquettes composées reconnues telles quelles (avant la règle du dernier mot)
 const WHOLE = [
   [/\b(hip hop|hiphop|g funk)\b/, 'rap'], [/\btrip hop\b/, 'electro'], [/\b(r b|rnb|rhythm and blues)\b/, 'soul'],
@@ -72,6 +80,13 @@ export function buildMixes(LIB) {
     // la chanson française prime : Renaud reste dans « Chanson française », pas aussi dans Pop et Rock
     fams.set(a.id, keep.has('chanson') ? new Set(['chanson']) : keep);
   }
+  // classiques par style : les titres ★ des albums du style, du plus connu au moins connu
+  for (const [key, title] of MIX_STYLES) {
+    const pick = hits.filter((t) => fams.get(t.albumId)?.has(key));
+    if (pick.length < CLASSICS_MIN || new Set(pick.map((t) => t.artistId)).size < 2) continue;
+    const albums = [...new Set(pick.map((t) => t.albumId))].map((id) => A.get(id)).filter(Boolean);
+    add(`classiques-${key}`, CLASSIC_TITLES[key] || `Classiques · ${title}`, 'classics-style', `Les titres les plus célèbres de votre bibliothèque en « ${title} », du plus connu au moins connu.`, albums, pick.map((t) => t.id));
+  }
   for (const [key, title] of MIX_STYLES) {
     const albums = LIB.albums.filter((a) => fams.get(a.id).has(key)).sort(byArtistYear);
     const ids = albums.flatMap((a) => a.tracks);
@@ -90,7 +105,8 @@ export function buildMixes(LIB) {
   // en évitant celles déjà montrées par les sélections précédentes (dans l'ordre d'affichage)
   const score = (a) => a.tracks.reduce((s, id) => s + (T.get(id)?.hit ? 1 : 0), 0);
   const used = new Set();
-  const order = [...map.values()].sort((a, b) => ['classics', 'style', 'decade'].indexOf(a.kind) - ['classics', 'style', 'decade'].indexOf(b.kind) || (a.kind === 'style' ? b.ids.length - a.ids.length : 0));
+  const KINDS = ['classics', 'classics-style', 'style', 'decade'];
+  const order = [...map.values()].sort((a, b) => KINDS.indexOf(a.kind) - KINDS.indexOf(b.kind) || (a.kind === 'style' || a.kind === 'classics-style' ? b.ids.length - a.ids.length : 0));
   for (const m of order) {
     let cands = m.albums.filter((a) => a.hasCover !== false).sort((a, b) => score(b) - score(a));
     // la bannière des classiques a besoin de 6 pochettes : complétée par d'autres albums si besoin

@@ -21,7 +21,7 @@ recherche qui comprend « metal allemand des années 80 », et zéro dépendance
 
 <table>
   <tr>
-    <td width="50%"><img src="docs/screenshots/album.jpg" alt="Page d'un album"><br><b>Albums</b> : pochette inclinable, disque qui tourne pendant l'écoute, présentation en une phrase, titres très connus marqués ★.</td>
+    <td width="50%"><img src="docs/screenshots/album.jpg" alt="Page d'un album"><br><b>Albums</b> : pochette inclinable, disque qui tourne pendant l'écoute, présentation en une phrase, titres très connus marqués ★. Un clic sur la pochette du lecteur ramène à l'album en cours.</td>
     <td width="50%"><img src="docs/screenshots/artist.jpg" alt="Page d'un artiste"><br><b>Artistes</b> : photo, origine, années d'activité, biographie, titres populaires et discographie.</td>
   </tr>
   <tr>
@@ -29,8 +29,7 @@ recherche qui comprend « metal allemand des années 80 », et zéro dépendance
     <td width="50%"><img src="docs/screenshots/search.jpg" alt="Recherche « années 80 »"><br><b>Recherche</b> : fautes de frappe, sigles (« rhcp »), décennies, années, pays, genres.</td>
   </tr>
   <tr>
-    <td width="50%"><img src="docs/screenshots/selections.jpg" alt="Sélections : classiques, récemment ajoutés, playlists"><br><b>Sélections</b> : les classiques ★, les albums récemment ajoutés, des playlists toutes prêtes par style et par décennie.</td>
-    <td width="50%"><img src="docs/screenshots/now-playing.jpg" alt="Lecture en plein écran"><br><b>À l'écoute</b> : plein écran, couleurs tirées de la pochette, touches multimédia du clavier.</td>
+    <td colspan="2"><img src="docs/screenshots/selections.jpg" alt="Sélections : classiques, récemment ajoutés, playlists"><br><b>Sélections</b> : les classiques ★ (tous styles confondus, puis par style : rock, metal, pop…), les albums récemment ajoutés, des playlists toutes prêtes par style et par décennie.</td>
   </tr>
 </table>
 

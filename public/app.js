@@ -520,7 +520,7 @@ const mosaic = (m, n = 4) => { const list = mosaicAlbums(m, n); const k = list.l
   return `<div class="mosaic n${k}">${list.slice(0, k).map((a) => `<img loading="lazy" src="${cover(a.id)}" alt="">`).join('')}</div>`; };
 const mixDuration = (m) => fmtLong(m.ids.reduce((s, id) => s + (T.get(id)?.duration || 0), 0));
 const mixCard = (m) => `<div class="mix-card" data-mix="${m.key}">
-    <div class="mix-art">${mosaic(m)}<div class="mix-shade"></div><div class="mix-name">${esc(m.title)}${m.kind === 'classics' ? ' <span class="mix-star">★</span>' : ''}</div>
+    <div class="mix-art">${mosaic(m)}<div class="mix-shade"></div><div class="mix-name">${esc(m.title)}${m.kind.startsWith('classics') ? ' <span class="mix-star">★</span>' : ''}</div>
       <button class="card-play" data-play-mix="${m.key}" title="Lecture aléatoire">${ICON.play}</button></div>
     <div class="card-sub">${m.ids.length} titres · ${mixDuration(m)}</div></div>`;
 
@@ -529,6 +529,7 @@ function viewSelections() {
   const classics = all.find((m) => m.kind === 'classics');
   const recent = [...LIB.albums].filter((a) => a.added).sort((a, b) => b.added.localeCompare(a.added) || byArtistYear(a, b)).slice(0, 14);
   const styles = all.filter((m) => m.kind === 'style').sort((a, b) => b.ids.length - a.ids.length);
+  const classicStyles = all.filter((m) => m.kind === 'classics-style').sort((a, b) => b.ids.length - a.ids.length);
   const decades = all.filter((m) => m.kind === 'decade');
   view.innerHTML = `<div class="page selections">
     <div class="page-head"><h1>Sélections</h1></div>
@@ -537,6 +538,7 @@ function viewSelections() {
         <p>${classics.ids.length} grands titres de votre bibliothèque · ${mixDuration(classics)}</p>
         <div class="hero-actions"><button class="btn primary" data-play-mix="classiques" data-autofocus>${ICON.shuffle} Lecture aléatoire</button></div></div></div>` : ''}
     ${recent.length ? `<h2>Récemment ajoutés</h2><div class="shelf">${recent.map(albumCard).join('')}</div>` : ''}
+    ${classicStyles.length ? `<h2>Classiques par style</h2><div class="mix-grid">${classicStyles.map(mixCard).join('')}</div>` : ''}
     ${styles.length ? `<h2>Par style</h2><div class="mix-grid">${styles.map(mixCard).join('')}</div>` : ''}
     ${decades.length ? `<h2>Par décennie</h2><div class="mix-grid">${decades.map(mixCard).join('')}</div>` : ''}
   </div>`;
@@ -551,7 +553,7 @@ function viewSelection(key) {
       <div class="mix-cover">${mosaic(m)}</div>
       <div class="hero-info">
         <div class="eyebrow">Sélection</div>
-        <h1>${esc(m.title)}${m.kind === 'classics' ? ' <span class="mix-star">★</span>' : ''}</h1>
+        <h1>${esc(m.title)}${m.kind.startsWith('classics') ? ' <span class="mix-star">★</span>' : ''}</h1>
         <p class="hero-note on">${esc(m.note)}</p>
         <div class="hero-facts">${m.ids.length} titres · ${m.albums.length} album${m.albums.length > 1 ? 's' : ''} · ${mixDuration(m)}</div>
         <div class="hero-actions"><button class="btn primary" data-act="play" data-autofocus>${ICON.play} Lecture</button><button class="btn soft" data-act="shuffle">${ICON.shuffle} Aléatoire</button></div>
@@ -1042,8 +1044,8 @@ const player = {
 function shuffleArr(a) { for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
 
 audio.addEventListener('ended', () => player.next(true));
-audio.addEventListener('play', () => { document.body.classList.add('is-playing'); $('#np').classList.add('is-playing'); document.body.classList.remove('paused'); });
-audio.addEventListener('pause', () => { document.body.classList.remove('is-playing'); $('#np').classList.remove('is-playing'); document.body.classList.add('paused'); });
+audio.addEventListener('play', () => { document.body.classList.add('is-playing'); document.body.classList.remove('paused'); });
+audio.addEventListener('pause', () => { document.body.classList.remove('is-playing'); document.body.classList.add('paused'); });
 audio.addEventListener('error', () => { if (player.current) toast('Lecture impossible de ce fichier'); });
 document.body.classList.add('paused');
 
@@ -1052,9 +1054,7 @@ let seeking = false;
 audio.addEventListener('timeupdate', () => {
   if (seeking) return;
   const d = audio.duration || T.get(player.current)?.duration || 0;
-  for (const [s, c, t] of [['#seek', '#t-cur', '#t-dur'], ['#np-seek', '#np-cur', '#np-dur']]) {
-    setSlider($(s), d ? audio.currentTime / d : 0); $(c).textContent = fmtTime(audio.currentTime); $(t).textContent = '-' + fmtTime(d - audio.currentTime);
-  }
+  setSlider($('#seek'), d ? audio.currentTime / d : 0); $('#t-cur').textContent = fmtTime(audio.currentTime); $('#t-dur').textContent = '-' + fmtTime(d - audio.currentTime);
   if ('setPositionState' in navigator.mediaSession && d) try { navigator.mediaSession.setPositionState({ duration: d, position: Math.min(audio.currentTime, d), playbackRate: 1 }); } catch {}
 });
 function bindSlider(el, onChange, onEnd) {
@@ -1066,10 +1066,8 @@ function bindSlider(el, onChange, onEnd) {
     el.addEventListener('pointermove', mv); el.addEventListener('pointerup', up);
   });
 }
-for (const s of ['#seek', '#np-seek']) {
-  bindSlider($(s), (v) => { seeking = true; setSlider($('#seek'), v); setSlider($('#np-seek'), v); const t = fmtTime(v * (audio.duration || 0)); $('#t-cur').textContent = $('#np-cur').textContent = t; },
-    (v) => { if (audio.duration) audio.currentTime = v * audio.duration; seeking = false; });
-}
+bindSlider($('#seek'), (v) => { seeking = true; setSlider($('#seek'), v); $('#t-cur').textContent = fmtTime(v * (audio.duration || 0)); },
+  (v) => { if (audio.duration) audio.currentTime = v * audio.duration; seeking = false; });
 audio.volume = store.get('volume', 0.8);
 setSlider($('#volume'), audio.volume);
 bindSlider($('#volume'), (v) => { audio.volume = v; setSlider($('#volume'), v); store.set('volume', v); });
@@ -1093,15 +1091,13 @@ function syncButtons() {
 }
 syncButtons();
 
-let npBg = 0;
 function updateNowPlaying(t) {
   const a = A.get(t.albumId);
   if (updateNowPlaying.last && updateNowPlaying.last !== t.id) { // le texte glisse, la pochette change en fondu
-    replay($('#player .p-meta')); replay($('#np .np-info'));
-    if (T.get(updateNowPlaying.last)?.albumId !== t.albumId) { replay($('#player .p-art')); replay($('#np-cover')); }
+    replay($('#player .p-meta'));
+    if (T.get(updateNowPlaying.last)?.albumId !== t.albumId) replay($('#player .p-art'));
   }
   updateNowPlaying.last = t.id;
-  $('#np-cover').style.setProperty('--art', `url('${cover(t.albumId)}')`);
   $('#p-cover').src = cover(t.albumId);
   document.body.classList.add('has-track');
   coverGradient(t.albumId).then(([c1, c2]) => { if (player.current !== t.id) return; const pl = $('#player'); pl.style.setProperty('--pc1', c1.join(' ')); pl.style.setProperty('--pc2', c2.join(' ')); });
@@ -1110,12 +1106,6 @@ function updateNowPlaying(t) {
   const fmt = t.lossless && t.bits ? `Lossless · ${t.bits} bits/${(t.rate / 1000).toLocaleString('fr-FR')} kHz` : t.codec;
   $('#p-format').textContent = t.lossless ? 'Lossless' : '';
   $('#p-format').title = fmt;
-  $('#np-img').src = cover(t.albumId);
-  const bg = $$('.np-bg img')[npBg ^= 1]; bg.onload = () => { bg.classList.add('on'); $$('.np-bg img')[npBg ^ 1].classList.remove('on'); }; bg.src = cover(t.albumId);
-  $('#np-title').textContent = t.title;
-  $('#np-artist').textContent = t.artist; $('#np-artist').href = `#/artist/${t.artistId}`;
-  $('#np-album').textContent = `${t.album}${t.year ? ' · ' + t.year : ''}`;
-  $('#np-format').textContent = fmt;
   document.title = `${t.title} — ${t.artist}`;
   $$('[data-track]').forEach((el) => el.classList.toggle('playing', el.dataset.track === t.id));
   $$('.hero-disc').forEach((d) => d.classList.toggle('playing', d.dataset.album === t.albumId));
@@ -1233,21 +1223,13 @@ $('#q-clear').onclick = () => player.clearUpcoming();
 $('#p-next').onclick = (e) => { if (!e.target.closest('#b-queue')) $('#b-queue').click(); };
 $('#q-close').onclick = () => { $('#queue').classList.remove('open'); $('#b-queue').classList.remove('on'); };
 
-// Plein écran « À l'écoute »
-const np = $('#np');
-const openNP = () => { if (!player.current) return; np.classList.add('open'); np.setAttribute('aria-hidden', 'false'); setTimeout(() => nav.focusEl($('#np [data-act="toggle"]')), 50); };
-const closeNP = () => { np.classList.remove('open'); np.setAttribute('aria-hidden', 'true'); };
-$('#p-now').onclick = openNP;
-$('#np-close').onclick = closeNP;
-$('#np-artist').addEventListener('click', closeNP);
-np.addEventListener('click', (e) => { const act = e.target.closest('[data-act]')?.dataset.act; if (act === 'prev') player.prev(); if (act === 'next') player.next(false); if (act === 'toggle') player.toggle(); });
-np.addEventListener('pointermove', (e) => {
-  if (!np.classList.contains('is-playing')) return;
-  const c = $('#np-cover'), r = c.getBoundingClientRect();
-  const px = (e.clientX - (r.left + r.width / 2)) / innerWidth, py = (e.clientY - (r.top + r.height / 2)) / innerHeight;
-  c.style.transform = `rotateY(${px * 22}deg) rotateX(${-py * 22}deg)`;
-  c.style.setProperty('--gx', 50 + px * 120 + '%'); c.style.setProperty('--gy', 50 + py * 120 + '%');
-});
+// Mini pochette du lecteur : ouvre la page de l'album en cours (déjà dessus : remonte en haut)
+$('#p-now').onclick = () => {
+  const t = T.get(player.current); if (!t) return;
+  const hash = `#/album/${t.albumId}`;
+  if (location.hash === hash) return view.scrollTo({ top: 0, behavior: calm() ? 'auto' : 'smooth' });
+  location.hash = hash;
+};
 
 // ---------- Clavier et télécommande ----------
 // Flèches : se déplacer · OK/Entrée : valider · Retour/Échap : revenir · Espace/⏯ : lecture/pause
@@ -1256,7 +1238,6 @@ const ARROWS = { ArrowUp: 'up', ArrowDown: 'down', ArrowLeft: 'left', ArrowRight
 function goBack() {
   if ($('#remote').classList.contains('open')) return $('#rm-close')?.click();
   if ($('#queue').classList.contains('open')) { $('#q-close').click(); return nav.focusEl($('#b-queue')); }
-  if (np.classList.contains('open')) { closeNP(); return nav.focusEl($('#p-now')); }
   if (/^#\/?(album|artist|selection|mp3)/.test(location.hash)) return navigateBack();
   if (/^#\/?search/.test(location.hash) && history.length > 1) return history.back();
 }

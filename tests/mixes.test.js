@@ -125,3 +125,21 @@ test('chanson française : l’album y reste seul, pas aussi dans Pop et Rock', 
   assert.deepEqual(m.get('chanson').albums.map((a) => a.id), ['f1', 'f2']);
   assert.ok(!m.get('pop').albums.some((a) => a.artist === 'Chanteur') && !m.get('rock').albums.some((a) => a.artist === 'Chanteur'));
 });
+
+test('classiques par style : titres ★ du style, du plus connu au moins connu, au moins 8 titres de 2 artistes', () => {
+  const hits8 = (base) => Array.from({ length: 8 }, (_, i) => base - i * 1000);
+  const m = buildMixes(library([
+    ['m1', 'Alpha', 1986, 'Thrash Metal', 8, { hits: hits8(990000) }], ['m2', 'Beta', 1991, 'Heavy Metal', 8, { hits: [989500, 0, 0, 0, 0, 0, 0, 0] }],
+    ['p1', 'Gamma', 2001, 'Pop', 8, { hits: hits8(900000) }], ['p2', 'Gamma', 2004, 'Pop', 8, { hits: hits8(800000) }], // un seul artiste pop
+    ['r1', 'Delta', 1970, 'Rock', 12], ['r2', 'Eps', 1972, 'Rock', 12], // du rock, mais sans titre ★
+  ]));
+  const metal = m.get('classiques-metal');
+  assert.equal(metal.title, 'Classiques du metal');
+  assert.equal(metal.kind, 'classics-style');
+  assert.deepEqual(metal.ids.slice(0, 3), ['m1-1', 'm2-1', 'm1-2'], 'rang décroissant, tous artistes du style mêlés');
+  assert.equal(metal.ids.length, 9);
+  assert.ok(!m.has('classiques-pop'), 'un seul artiste : pas de playlist');
+  assert.ok(!m.has('classiques-rock'), 'pas de titres ★ : pas de playlist');
+  assert.ok(m.has('classiques'), 'la sélection générale reste là');
+  assert.deepEqual(metal.cover.map((a) => a.id).sort(), ['m1', 'm2'], 'mosaïque : une pochette par artiste');
+});

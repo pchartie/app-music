@@ -144,7 +144,6 @@ try {
   await go('#/search/années 80', 1600); await shot('search');
   await page.evaluate(() => { document.querySelector('#search').value = ''; document.activeElement?.blur(); });
   await go('#/selections', 2200); await page.mouse.move(1300, 120); await shot('selections');
-  await page.click('#p-now'); await sleep(1800); await page.mouse.move(720, 420); await sleep(400); await shot('now-playing');
   if (errors.length) console.warn('Erreurs JavaScript :', errors);
   await srv.stop();
   console.log(`Captures dans ${path.relative(ROOT, OUT)}/`);
